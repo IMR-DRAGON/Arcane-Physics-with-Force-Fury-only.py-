@@ -2839,12 +2839,21 @@ class Battle:
             if self.arena_type != "OCTAGON":
                 self.arena_rect = pygame.Rect((WIDTH-self.arena_size)//2, (HEIGHT-self.arena_size)//2, self.arena_size, self.arena_size)
                 r = self.arena_rect
-                # Update existing physics walls positions
+                # Update existing physics walls positions (recreate since .a/.b are read-only)
                 if len(self.walls) >= 4:
-                    self.walls[0].a, self.walls[0].b = (r.left, r.top), (r.right, r.top)
-                    self.walls[1].a, self.walls[1].b = (r.right, r.top), (r.right, r.bottom)
-                    self.walls[2].a, self.walls[2].b = (r.right, r.bottom), (r.left, r.bottom)
-                    self.walls[3].a, self.walls[3].b = (r.left, r.bottom), (r.left, r.top)
+                    static = self.space.static_body
+                    # Remove only first 4 walls (main arena)
+                    for w in self.walls[:4]:
+                        if w in self.space.shapes: self.space.remove(w)
+                    
+                    self.walls[0] = pymunk.Segment(static, (r.left, r.top), (r.right, r.top), 10)
+                    self.walls[1] = pymunk.Segment(static, (r.right, r.top), (r.right, r.bottom), 10)
+                    self.walls[2] = pymunk.Segment(static, (r.right, r.bottom), (r.left, r.bottom), 10)
+                    self.walls[3] = pymunk.Segment(static, (r.left, r.bottom), (r.left, r.top), 10)
+                    
+                    for w in self.walls[:4]:
+                        w.elasticity = 0.95; w.friction = 0.1
+                        self.space.add(w)
                 self.space.reindex_static()
 
         # ── START MATCH DELAY (Freeze for 1s) ──
