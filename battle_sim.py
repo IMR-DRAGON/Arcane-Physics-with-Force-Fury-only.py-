@@ -247,6 +247,39 @@ class Projectile:
         self.trail.append((int(self.x), int(self.y)))
         if len(self.trail) > 8:
             self.trail.pop(0)
+
+class PowerUp:
+    def __init__(self, x, y, type_name):
+        self.x, self.y = float(x), float(y)
+        self.type = type_name # "Shield", "Rage", "Speed"
+        self.size = 18
+        self.alive = True
+        self.life = 12.0 # Despawns if not collected
+        self.color = BLUE if type_name == "Shield" else RED if type_name == "Rage" else GREEN
+        self.bob_timer = 0
+        
+    def update(self, dt):
+        self.life -= dt
+        self.bob_timer += dt * 5
+        # Subtle floating effect
+        return self.life > 0
+
+    def draw(self, screen, font_small):
+        # Glow
+        glow_size = self.size * 2 + math.sin(pygame.time.get_ticks()*0.01)*5
+        glow = pygame.Surface((glow_size*2, glow_size*2), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*self.color, 60), (glow_size, glow_size), glow_size)
+        screen.blit(glow, (int(self.x - glow_size), int(self.y - glow_size)))
+        
+        # Main icon
+        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+        pygame.draw.circle(screen, WHITE, (int(self.x), int(self.y)), self.size, 2)
+        
+        # Symbol
+        sym = "S" if self.type == "Shield" else "R" if self.type == "Rage" else "V"
+        txt = font_small.render(sym, True, WHITE)
+        screen.blit(txt, (int(self.x - txt.get_width()//2), int(self.y - txt.get_height()//2)))
+
         if self.homing and targets:
             closest = min(targets, key=lambda t: math.hypot(t.x-self.x, t.y-self.y))
             dx = closest.x - self.x
@@ -1033,6 +1066,13 @@ class Fighter:
         self.particles  = particles
         self.abilities  = [Ability(a.name, a.cooldown, a.damage, a.range,
                                    a.color, a.description) for a in data["abilities"]]
+        self.hidden_trait = random.choice(["RAGE", "SHIELD", "LUCK", "SPEED"])
+        self.trait_active = False # One-time per health gate for some, timed for others
+        self.trait_timer = 0.0
+        self.trait_label_txt = ""
+        self.trait_label_timer = 0.0
+
+        # Ability cooldowns
         self.dodge_rate = data.get("dodge_rate", 0.1)
         self.weapon_type = data.get("weapon_type", "fists")
         self.has_shield = data.get("has_shield", False)
@@ -1329,6 +1369,14 @@ class Fighter:
 
     def _run_ai(self, dt, projectiles):
         t = self.ai_target
+        
+        # ── STRATEGIC CONTENTION: POWER-UP FOCUS ──
+        if hasattr(self, 'battle_ref') and self.battle_ref.powerups:
+            visible_pu = [pu for pu in self.battle_ref.powerups if math.hypot(pu.x-self.x, pu.y-self.y) < 450]
+            if visible_pu:
+                # We see the shiny! Head towards it instead of enemy
+                t = min(visible_pu, key=lambda p: math.hypot(p.x-self.x, p.y-self.y))
+        
         dx, dy = t.x - self.x, t.y - self.y
         dist  = max(1, math.hypot(dx, dy))
         ndx, ndy = dx/dist, dy/dist
@@ -2694,6 +2742,8 @@ class Battle:
         self.sd_start = 45 if is_br else 60
         self.sd_active = False
         self.orig_arena_size = 600
+        self.powerups: List[PowerUp] = []
+        self.pu_spawn_timer = 10.0 # First one at 10s
 
         # ── ARENA GENERATION ──
         self.arena_size = 600
@@ -2871,6 +2921,51 @@ class Battle:
             return
 
         self.elapsed += dt
+        
+        # ── POWER-UP SPAWNING ──
+        if self.elapsed > 2.0: # Only spawn after intro
+            self.pu_spawn_timer -= dt
+            if self.pu_spawn_timer <= 0:
+                self.pu_spawn_timer = 15.0
+                ptype = random.choice(["Shield", "Rage", "Speed"])
+                px = WIDTH//2 + random.uniform(-180, 180)
+                py = HEIGHT//2 + random.uniform(-180, 180)
+                if self.arena_type != "OCTAGON":
+                    r = self.arena_rect
+                    px = max(r.left+60, min(r.right-60, px))
+                    py = max(r.top+60, min(r.bottom-60, py))
+                self.powerups.append(PowerUp(px, py, ptype))
+                self.particles.emit_ring(px, py, GOLD, count=25, speed=200, size=6)
+
+        # Update powerups
+        new_pu = []
+        for pu in self.powerups:
+            if pu.update(dt):
+                hit_f = None
+                for cand in alive_fighters:
+                    if math.hypot(cand.x - pu.x, cand.y - pu.y) < cand.size + pu.size:
+                        hit_f = cand
+                        break
+                if hit_f:
+                    self.sounds.play('special')
+                    hit_f.particles.emit_ring(hit_f.x, hit_f.y, pu.color, count=30, speed=250, size=8)
+                    if pu.type == "Shield":
+                        hit_f.trait_label_txt = "ENERGY SHIELD!"
+                        hit_f.trait_label_timer = 1.5
+                        hit_f.invincible_timer = 4.0
+                    elif pu.type == "Rage":
+                        hit_f.trait_label_txt = "POWER RAGE!"
+                        hit_f.trait_label_timer = 1.5
+                        hit_f.hidden_trait = "RAGE"
+                        hit_f.trait_timer = 6.0
+                    elif pu.type == "Speed":
+                        hit_f.trait_label_txt = "MAX SPEED!"
+                        hit_f.trait_label_timer = 1.5
+                        hit_f.speed *= 1.3
+                else:
+                    new_pu.append(pu)
+        self.powerups = new_pu
+
         alive_fighters = [f for f in self.fighters if f.alive]
 
         for f in self.fighters:
@@ -2998,6 +3093,7 @@ class Battle:
             pygame.draw.rect(canvas, (50, 60, 80), (r.left + self.shake_off()[0], r.top + self.shake_off()[1], r.width, r.height), 2)
 
         # Draw World Objects
+        for pu in self.powerups: pu.draw(canvas, font_small)
         for proj in self.projectiles: proj.draw(canvas)
         self.particles.draw(canvas)
         for f in self.fighters: f.draw(canvas, font_small)
