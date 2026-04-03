@@ -2,13 +2,13 @@
 
 A high-performance, physics-based 2D battle simulator featuring **40 unique character classes**, dynamic arena hazards, and a premium "Combat Juiciness" update. Face off in team battles or intense Battle Royale (BR) modes where every impact, explosion, and ability strike is physically simulated.
 
-## ✨ Latest Features: "The Juiciness & Stats Update"
-- **🥊 Combat Weight:** Implemented **Hit-Stop (Freeze-Frame)** on heavy internal impacts (60ms–120ms) and dynamic screenshake.
-- **📸 Visual Feedback:** Critical hit popups, impact flashes, and gold particle leveling rings.
-- **📊 Match Statistics & MVP:** Comprehensive post-match dashboard tracking **Total Kills**, **Damage Dealt**, and **Luckiest** fighter (highest trait activations).
-- **📈 Global Leveling:** Fighters scale in size (8%) and damage (15%) with every kill, becoming "Boss" threats.
-- **⚖️ Strategic Hazards:** Incremental stage damage (1.0 + 0.6 per hit) and shrinking arena **Sudden Death** with periodic void damage.
-- **🕒 Pre-Match Flow:** Professional 1.0s "READY... FIGHT!" countdown with frozen character starts.
+## ✨ Latest Updates: "Animatic Combat & Tactical AI"
+- **🎭 Visual Juiciness:** Implemented **Squash & Stretch** deformation based on movement velocity for a premium "cartoon physics" feel.
+- **🫨 Impact Response:** Added **Hit-Shake** vibration to character bodies during damage flashes and brief **Hit-Stop** on all strikes.
+- **🏹 Tactical AI:** New **Scramble & Regroup** AI logic. Fighters now perform tactical retreats and defensive maneuvers after being hit before re-engaging.
+- **💨 Ability Lunges:** Melee attacks now feature a physics-based **Lunge (Forward Dash)** and **Visual Slash Arcs** for better "combat read."
+- **💥 Refined Knockback:** Increased recoil and dynamic "bump" forces for character-to-character collisions.
+- **📊 Match Statistics & MVP:** Comprehensive post-match dashboard tracking **Total Kills**, **Damage Dealt**, and **Luckiest** fighter.
 
 ## 🛠 Prerequisites
 Ensure you have the following installed to run the simulator:

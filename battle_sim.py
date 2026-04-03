@@ -68,14 +68,25 @@ class SoundManager:
 
     def _gen_thud(self):
         sr = 44100
-        dur = 0.2
+        dur = 0.25  # slightly longer but softer
         t = np.linspace(0, dur, int(sr*dur))
-        freq = np.linspace(150, 40, len(t))
+        freq = np.linspace(100, 30, len(t)) # lower freq
         snd = np.sin(2 * np.pi * freq * t)
-        env = np.exp(-15 * t)
-        buf = (snd * env * 0.6 * 32767).astype(np.int16)
+        env = np.exp(-12 * t)
+        buf = (snd * env * 0.15 * 32767).astype(np.int16) # volume dropped from 0.6 -> 0.15
         stereo = np.column_stack((buf, buf))
         self.sounds['thud'] = pygame.sndarray.make_sound(stereo)
+
+    def _gen_jump(self):
+        sr = 44100
+        dur = 0.15
+        t = np.linspace(0, dur, int(sr*dur))
+        freq = np.linspace(200, 400, len(t)) # sweeps up
+        snd = np.sin(2 * np.pi * freq * t)
+        env = np.exp(-15 * t)
+        buf = (snd * env * 0.1 * 32767).astype(np.int16) # very soft jump sound
+        stereo = np.column_stack((buf, buf))
+        self.sounds['jump'] = pygame.sndarray.make_sound(stereo)
 
     def _gen_heal(self):
         sr = 44100
@@ -91,9 +102,9 @@ class SoundManager:
     def _build_sounds(self):
         self._gen_hit()
         self._gen_shoot()
-        self._gen_special()
         self._gen_slash()
         self._gen_thud()
+        self._gen_jump()
         self._gen_heal()
 
     def play(self, name):
@@ -186,6 +197,22 @@ class ParticleSystem:
             py = y1 + (y2-y1)*t + random.uniform(-8,8)
             self.particles.append(Particle(px, py, 0, 0, color, size, life, False))
 
+    def emit_slash(self, x, y, direction, color, size=60, count=12):
+        # A semi-circular slash arc
+        for i in range(count):
+            ang = direction + (i - count//2) * 0.18
+            px = x + math.cos(ang) * size
+            py = y + math.sin(ang) * size
+            self.particles.append(Particle(px, py, math.cos(ang)*50, math.sin(ang)*50, color, 5, 0.4, False))
+
+    def emit_impact(self, x, y, color, count=15, speed=300):
+        for _ in range(count):
+            ang = random.uniform(0, math.pi*2)
+            spd = random.uniform(speed*0.5, speed)
+            vx = math.cos(ang) * spd
+            vy = math.sin(ang) * spd
+            self.particles.append(Particle(x, y, vx, vy, color, 4, 0.6, True))
+
     def update(self, dt):
         self.particles = [p for p in self.particles if p.update(dt)]
 
@@ -225,29 +252,6 @@ class DamagePopup:
         text_surf.set_alpha(alpha)
         screen.blit(text_surf, (self.x - text_surf.get_width()//2, self.y))
 
-class Projectile:
-    def __init__(self, x, y, vx, vy, damage, color, size, owner_team,
-                 trail_color=None, piercing=False, homing=False, aoe_radius=0, owner=None):
-        self.owner = owner
-        self.x, self.y = float(x), float(y)
-        self.vx, self.vy = float(vx), float(vy)
-        self.damage = damage
-        self.color = color
-        self.size = size
-        self.owner_team = owner_team
-        self.trail_color = trail_color or color
-        self.piercing = piercing
-        self.homing = homing
-        self.aoe_radius = aoe_radius
-        self.alive = True
-        self.trail = []
-        self.gravity_affected = False
-
-    def update(self, dt, targets):
-        self.trail.append((int(self.x), int(self.y)))
-        if len(self.trail) > 8:
-            self.trail.pop(0)
-
 class PowerUp:
     def __init__(self, x, y, type_name):
         self.x, self.y = float(x), float(y)
@@ -280,6 +284,28 @@ class PowerUp:
         txt = font_small.render(sym, True, WHITE)
         screen.blit(txt, (int(self.x - txt.get_width()//2), int(self.y - txt.get_height()//2)))
 
+class Projectile:
+    def __init__(self, x, y, vx, vy, damage, color, size, owner_team,
+                 trail_color=None, piercing=False, homing=False, aoe_radius=0, owner=None):
+        self.owner = owner
+        self.x, self.y = float(x), float(y)
+        self.vx, self.vy = float(vx), float(vy)
+        self.damage = damage
+        self.color = color
+        self.size = size
+        self.owner_team = owner_team
+        self.trail_color = trail_color or color
+        self.piercing = piercing
+        self.homing = homing
+        self.aoe_radius = aoe_radius
+        self.alive = True
+        self.trail = []
+        self.gravity_affected = False
+
+    def update(self, dt, targets):
+        self.trail.append((int(self.x), int(self.y)))
+        if len(self.trail) > 8:
+            self.trail.pop(0)
         if self.homing and targets:
             closest = min(targets, key=lambda t: math.hypot(t.x-self.x, t.y-self.y))
             dx = closest.x - self.x
@@ -337,16 +363,16 @@ CHARACTER_DATA = {
     "⚔️ Warrior": {
         "color": (200, 150, 50),
         "body_color": (180, 100, 30),
-        "hp": 500,
+        "hp": 750,
         "speed": 220,
         "mass": 3.0,
         "size": 18,
         "description": "Heavily armored melee fighter\nHigh HP, slow but deadly at close range",
         "abilities": [
-            Ability("Sword Slash",   0.8,  70, 80,  GOLD,   "Powerful melee swing"),
-            Ability("Shield Bash",   2.0,  40, 60,  SILVER, "Knocks enemy back hard"),
-            Ability("War Cry",       8.0,  30, 200, ORANGE, "AOE shout damages all nearby"),
-            Ability("Berserker",    15.0, 120, 90,  CRIMSON,"Devastating power attack"),
+            Ability("Sword Slash",   0.8,  40, 80.0,  GOLD,   "Powerful melee swing"),
+            Ability("Shield Bash",   2.0,  60, 60.0,  SILVER, "Knocks enemy back hard"),
+            Ability("War Cry",       8.0,  90, 200.0, ORANGE, "AOE shout damages all nearby"),
+            Ability("Berserker",    15.0, 200, 90.0,  CRIMSON,"Devastating power attack"),
         ],
         "dodge_rate": 0.1,
         "weapon_type": "sword",
@@ -355,16 +381,16 @@ CHARACTER_DATA = {
     "🔮 Mage": {
         "color": (100, 80, 220),
         "body_color": (80, 60, 200),
-        "hp": 350,
+        "hp": 520,
         "speed": 200,
         "mass": 1.8,
         "size": 16,
         "description": "Arcane spellcaster\nLow HP but powerful ranged magic",
         "abilities": [
-            Ability("Fireball",     1.0,  75, 500, ORANGE, "Explosive fire projectile"),
-            Ability("Ice Shard",    0.7,  45, 600, CYAN,   "Piercing ice projectile"),
-            Ability("Lightning",    1.5,  90, 450, YELLOW, "Chain lightning bolt"),
-            Ability("Meteor",      12.0, 200, 600, RED,    "Massive meteor strike"),
+            Ability("Fireball",     1.0,  28, 500.0, ORANGE, "Explosive fire projectile"),
+            Ability("Ice Shard",    0.7,  30, 600.0, CYAN,   "Piercing ice projectile"),
+            Ability("Lightning",    1.5,  65, 450.0, YELLOW, "Chain lightning bolt"),
+            Ability("Meteor",      12.0, 200, 600.0, RED,    "Massive meteor strike"),
         ],
         "dodge_rate": 0.15,
         "weapon_type": "staff",
@@ -373,16 +399,16 @@ CHARACTER_DATA = {
     "🥷 Ninja": {
         "color": (60, 60, 80),
         "body_color": (40, 40, 60),
-        "hp": 380,
+        "hp": 480,
         "speed": 340,
         "mass": 1.5,
         "size": 15,
         "description": "Shadow assassin\nExtreme speed, teleport, combo attacks",
         "abilities": [
-            Ability("Shuriken",     0.5,  35, 500, SILVER, "3x rapid shurikens"),
-            Ability("Shadow Step",  3.0,  60, 100, PURPLE, "Teleport + backstab"),
-            Ability("Smoke Bomb",   5.0,  25, 150, (100,100,100), "Confuse + area damage"),
-            Ability("Death Mark",  10.0, 150, 300, CRIMSON,"Guaranteed critical hit"),
+            Ability("Shuriken",     0.5,  20, 500.0, SILVER, "3x rapid shurikens"),
+            Ability("Shadow Step",  3.0,  65, 100.0, PURPLE, "Teleport + backstab"),
+            Ability("Smoke Bomb",   5.0,  80, 150.0, (100,100,100), "Confuse + area damage"),
+            Ability("Death Mark",  10.0, 190, 300.0, CRIMSON,"Guaranteed critical hit"),
         ],
         "dodge_rate": 0.35,
         "weapon_type": "katana",
@@ -391,34 +417,34 @@ CHARACTER_DATA = {
     "🐉 Dragon": {
         "color": (180, 50, 30),
         "body_color": (140, 30, 20),
-        "hp": 600,
+        "hp": 900,
         "speed": 180,
         "mass": 4.0,
         "size": 22,
         "description": "Ancient fire dragon\nMassive HP, fire breath, flight",
         "abilities": [
-            Ability("Fire Breath",  0.9,  65, 250, ORANGE, "Cone of fire particles"),
-            Ability("Tail Whip",    1.5,  80, 100, BROWN,  "Sweeping tail AOE"),
-            Ability("Wing Slam",    4.0,  60, 180, RED,    "Shockwave from wings"),
-            Ability("Dragon Rage", 14.0, 250, 300, CRIMSON,"Full power fire explosion"),
+            Ability("Fire Breath",  0.9,  45, 250.0, ORANGE, "Cone of fire particles"),
+            Ability("Tail Whip",    1.5,  60, 100.0, BROWN,  "Sweeping tail AOE"),
+            Ability("Wing Slam",    4.0,  95, 180.0, RED,    "Shockwave from wings"),
+            Ability("Dragon Rage", 14.0, 220, 300.0, CRIMSON,"Full power fire explosion"),
         ],
-        "dodge_rate": 0.08,
+        "dodge_rate": 0.05,
         "weapon_type": "claws",
         "has_shield": False
     },
     "👿 Demon": {
         "color": (160, 30, 30),
         "body_color": (120, 20, 20),
-        "hp": 450,
+        "hp": 650,
         "speed": 240,
         "mass": 2.5,
         "size": 19,
         "description": "Hellish demon lord\nLife steal, dark magic, curses",
         "abilities": [
-            Ability("Dark Claw",    0.7,  55, 90,  CRIMSON,"Life-stealing melee"),
-            Ability("Hell Spike",   1.2,  70, 400, (150,0,50), "Homing dark projectile"),
-            Ability("Soul Drain",   5.0,  40, 200, PURPLE, "Drains HP, heals self"),
-            Ability("Hellfire",    11.0, 180, 350, ORANGE, "Rain of fire pillars"),
+            Ability("Dark Claw",    0.7,  35, 90.0,  CRIMSON,"Life-stealing melee"),
+            Ability("Hell Spike",   1.2,  50, 400.0, (150,0,50), "Homing dark projectile"),
+            Ability("Soul Drain",   5.0,  85, 200.0, PURPLE, "Drains HP, heals self"),
+            Ability("Hellfire",    11.0, 70, 350.0, ORANGE, "Rain of fire pillars"),
         ],
         "dodge_rate": 0.15,
         "weapon_type": "trident",
@@ -427,50 +453,50 @@ CHARACTER_DATA = {
     "🤖 Robot": {
         "color": (100, 130, 160),
         "body_color": (80, 110, 140),
-        "hp": 480,
+        "hp": 700,
         "speed": 210,
         "mass": 3.5,
         "size": 20,
         "description": "Combat android\nPrecise laser targeting, missiles, shield",
         "abilities": [
-            Ability("Laser Beam",   0.6,  50, 600, CYAN,   "Precise energy beam"),
-            Ability("Missile",      1.5,  90, 700, ORANGE, "Homing rocket"),
-            Ability("EMP Blast",    6.0,  45, 250, BLUE,   "AOE electric pulse"),
-            Ability("Overdrive",   13.0, 170, 500, YELLOW, "Rapid-fire laser barrage"),
+            Ability("Laser Beam",   0.6,  25, 600.0, CYAN,   "Precise energy beam"),
+            Ability("Missile",      1.5,  60, 700.0, ORANGE, "Homing rocket"),
+            Ability("EMP Blast",    6.0,  100, 250.0, BLUE,   "AOE electric pulse"),
+            Ability("Overdrive",   13.0, 200, 500.0, YELLOW, "Rapid-fire laser barrage"),
         ],
         "dodge_rate": 0.12
     },
     "🌪️ Elemental": {
         "color": (80, 180, 220),
         "body_color": (60, 160, 200),
-        "hp": 400,
+        "hp": 580,
         "speed": 260,
         "mass": 1.2,
         "size": 17,
         "description": "Wind & storm spirit\nTornado, lightning storm, levitation",
         "abilities": [
-            Ability("Gust",         0.6,  40, 300, CYAN,   "Wind pushes enemies back"),
-            Ability("Tornado",      2.5,  85, 200, TEAL,   "Spinning wind vortex"),
-            Ability("Thunderbolt",  1.8,  95, 500, YELLOW, "Direct lightning strike"),
-            Ability("Storm",       12.0, 200, 400, BLUE,   "Full screen storm barrage"),
+            Ability("Gust",         0.6,  30, 300.0, CYAN,   "Wind pushes enemies back"),
+            Ability("Tornado",      2.5,  75, 200.0, TEAL,   "Spinning wind vortex"),
+            Ability("Thunderbolt",  1.8,  60, 500.0, YELLOW, "Direct lightning strike"),
+            Ability("Storm",       12.0, 195, 400.0, BLUE,   "Full screen storm barrage"),
         ],
-        "dodge_rate": 0.28,
+        "dodge_rate": 0.2,
         "weapon_type": "staff",
         "has_shield": False
     },
     "🧛 Vampire": {
         "color": (130, 50, 130),
         "body_color": (100, 30, 100),
-        "hp": 420,
+        "hp": 600,
         "speed": 250,
         "mass": 2.0,
         "size": 17,
         "description": "Undead bloodsucker\nLife steal, bats, transform into mist",
         "abilities": [
-            Ability("Blood Drain",  0.8,  50, 100, CRIMSON,"Suck life from enemy"),
-            Ability("Bat Swarm",    2.0,  60, 350, PURPLE, "Launch swarm of bats"),
-            Ability("Mist Form",    5.0,  20, 150, (150,150,200), "Phase through attacks"),
-            Ability("Drain Life",   9.0, 140, 250, PINK,   "Massive HP steal attack"),
+            Ability("Blood Drain",  0.8,  35, 100.0, CRIMSON,"Suck life from enemy"),
+            Ability("Bat Swarm",    2.0,  60, 350.0, PURPLE, "Launch swarm of bats"),
+            Ability("Mist Form",    5.0,  0, 150.0, (150,150,200), "Phase through attacks"),
+            Ability("Drain Life",   9.0, 170, 250.0, PINK,   "Massive HP steal attack"),
         ],
         "dodge_rate": 0.22,
         "weapon_type": "staff",
@@ -479,16 +505,16 @@ CHARACTER_DATA = {
     "🏹 Archer": {
         "color": (80, 150, 60),
         "body_color": (60, 120, 40),
-        "hp": 360,
+        "hp": 500,
         "speed": 280,
         "mass": 1.6,
         "size": 15,
         "description": "Precision marksman\nLong range, rapid shots, explosive arrows",
         "abilities": [
-            Ability("Arrow Shot",   0.4,  40, 700, LIME,   "Quick precision arrow"),
-            Ability("Multi-Shot",   1.5,  30, 650, GREEN,  "5 arrows at once"),
-            Ability("Poison Arrow", 2.0,  25, 600, (100,200,50), "Poison DOT arrow"),
-            Ability("Rain of Arrows",10.0,160,500, ORANGE, "Arrow storm on target"),
+            Ability("Arrow Shot",   0.4,  20, 700.0, LIME,   "Quick precision arrow"),
+            Ability("Multi-Shot",   1.5,  55, 650.0, GREEN,  "5 arrows at once"),
+            Ability("Poison Arrow", 2.0,  40, 600.0, (100,200,50), "Poison DOT arrow"),
+            Ability("Rain of Arrows",10.0,180,500.0, ORANGE, "Arrow storm on target"),
         ],
         "dodge_rate": 0.2,
         "weapon_type": "bow",
@@ -497,16 +523,16 @@ CHARACTER_DATA = {
     "🔱 Poseidon": {
         "color": (30, 100, 200),
         "body_color": (20, 80, 180),
-        "hp": 500,
+        "hp": 780,
         "speed": 200,
         "mass": 3.0,
         "size": 20,
         "description": "God of the seas\nWater waves, trident attacks, tidal force",
         "abilities": [
-            Ability("Trident",      0.9,  65, 150, BLUE,   "Powerful trident thrust"),
-            Ability("Water Blast",  1.3,  70, 450, CYAN,   "High-pressure water shot"),
-            Ability("Tidal Wave",   5.0, 100, 300, BLUE,   "Sweeping wave knockback"),
-            Ability("Maelstrom",   13.0, 220, 400, TEAL,   "Massive water vortex"),
+            Ability("Trident",      0.9,  45, 150.0, BLUE,   "Powerful trident thrust"),
+            Ability("Water Blast",  1.3,  55, 450.0, CYAN,   "High-pressure water shot"),
+            Ability("Tidal Wave",   5.0, 100, 300.0, BLUE,   "Sweeping wave knockback"),
+            Ability("Maelstrom",   13.0, 210, 400.0, TEAL,   "Massive water vortex"),
         ],
         "dodge_rate": 0.12,
         "weapon_type": "trident",
@@ -515,32 +541,32 @@ CHARACTER_DATA = {
     "🕸️ Web-Slinger": {
         "color": (200, 30, 30),
         "body_color": (30, 50, 200),
-        "hp": 400,
+        "hp": 560,
         "speed": 320,
         "mass": 1.8,
         "size": 16,
         "description": "Web-swinging hero\nHigh mobility, stuns, and rapid melee",
         "abilities": [
-            Ability("Web Shot",     0.6,  30, 500, WHITE,  "Stuns enemy with webs"),
-            Ability("Web Swing",    2.5,  50, 400, BLUE,   "Dashing kick attack"),
-            Ability("Spider-Sense", 6.0,  20, 150, RED,    "Quick dodge & counter"),
-            Ability("Web Barrage", 12.0, 180, 500, WHITE,  "Multiple webs trap all"),
+            Ability("Web Shot",     0.6,  25, 500.0, WHITE,  "Stuns enemy with webs"),
+            Ability("Web Swing",    2.5,  70, 400.0, BLUE,   "Dashing kick attack"),
+            Ability("Spider-Sense", 6.0,  85, 150.0, RED,    "Quick dodge & counter"),
+            Ability("Web Barrage", 12.0, 195, 500.0, WHITE,  "Multiple webs trap all"),
         ],
         "dodge_rate": 0.3
     },
     "🚀 Tech-Armor": {
         "color": (200, 50, 50),
         "body_color": (220, 200, 50),
-        "hp": 450,
+        "hp": 680,
         "speed": 230,
         "mass": 2.8,
         "size": 18,
         "description": "High-tech armored suit\nEnergy beams, missiles, and flight",
         "abilities": [
-            Ability("Repulsor",    0.7,  55, 550, CYAN,   "Energy blast from palm"),
-            Ability("Mini-Missile", 1.8,  80, 650, ORANGE, "Homing mini-rockets"),
-            Ability("Uni-Beam",     7.0, 130, 700, WHITE,  "Massive chest laser"),
-            Ability("Rocket Barrage", 14.0, 220, 500, RED, "Full weapon discharge"),
+            Ability("Repulsor",    0.7,  35, 550.0, CYAN,   "Energy blast from palm"),
+            Ability("Mini-Missile", 1.8,  70, 650.0, ORANGE, "Homing mini-rockets"),
+            Ability("Uni-Beam",     7.0, 110, 700.0, WHITE,  "Massive chest laser"),
+            Ability("Rocket Barrage", 14.0, 210, 500.0, RED, "Full weapon discharge"),
         ],
         "dodge_rate": 0.15,
         "weapon_type": "blaster",
@@ -549,52 +575,52 @@ CHARACTER_DATA = {
     "🟢 Gamma-Giant": {
         "color": (50, 180, 50),
         "body_color": (120, 50, 180),
-        "hp": 750,
+        "hp": 1000,
         "speed": 160,
         "mass": 5.0,
         "size": 25,
         "description": "Unstoppable force\nHuge HP, massive smash damage",
         "abilities": [
-            Ability("Smash",        1.0,  90, 100, GREEN,  "Powerful ground punch"),
-            Ability("Gamma Leap",   3.0,  70, 300, LIME,   "Jumps and lands hard"),
-            Ability("Thunderclap",  5.0,  60, 250, WHITE,  "Shockwave stuns nearby"),
-            Ability("Hulk Rage",   15.0, 280, 350, RED,    "Devastating multi-smash"),
+            Ability("Smash",        1.0,  60, 100.0, GREEN,  "Powerful ground punch"),
+            Ability("Gamma Leap",   3.0,  80, 300.0, LIME,   "Jumps and lands hard"),
+            Ability("Thunderclap",  5.0,  100, 250.0, WHITE,  "Shockwave stuns nearby"),
+            Ability("Hulk Rage",   15.0, 220, 350.0, RED,    "Devastating multi-smash"),
         ],
-        "dodge_rate": 0.05,
+        "dodge_rate": 0.03,
         "weapon_type": "fists",
         "has_shield": False
     },
     "⚡ Thunder-God": {
         "color": (100, 200, 255),
         "body_color": (180, 180, 200),
-        "hp": 550,
-        "speed": 200,
+        "hp": 820,
+        "speed": 190,
         "mass": 3.5,
         "size": 20,
         "description": "God of Thunder\nLightning strikes & Mjolnir throws",
         "abilities": [
-            Ability("Hammer Throw", 0.9,  75, 600, SILVER, "Mjolnir flies and returns"),
-            Ability("Lightning",    1.5,  95, 450, YELLOW, "Call down a bolt"),
-            Ability("Shockwave",    4.0,  65, 200, CYAN,   "Hammer slam AOE"),
-            Ability("God Blast",   13.0, 240, 500, WHITE,  "Ultimate lightning storm"),
+            Ability("Hammer Throw", 0.9,  45, 600.0, SILVER, "Mjolnir flies and returns"),
+            Ability("Lightning",    1.5,  65, 450.0, YELLOW, "Call down a bolt"),
+            Ability("Shockwave",    4.0,  95, 200.0, CYAN,   "Hammer slam AOE"),
+            Ability("God Blast",   13.0, 205, 500.0, WHITE,  "Ultimate lightning storm"),
         ],
-        "dodge_rate": 0.12,
+        "dodge_rate": 0.1,
         "weapon_type": "hammer",
         "has_shield": False
     },
     "🛡️ Star-Soldier": {
         "color": (30, 80, 200),
         "body_color": (200, 30, 30),
-        "hp": 520,
+        "hp": 760,
         "speed": 250,
         "mass": 2.5,
         "size": 18,
         "description": "Peak human soldier\nMaster of shield combat & defense",
         "abilities": [
-            Ability("Shield Toss",  1.0,  60, 550, SILVER, "Ricochet shield attack"),
-            Ability("Combat Combo", 0.7,  45, 90,  BLUE,   "Rapid martial arts"),
-            Ability("Shield Charge",3.0,  70, 250, WHITE,  "Unstoppable dash bash"),
-            Ability("Final Stand", 12.0, 180, 300, RED,    "Heroic series of blows"),
+            Ability("Shield Toss",  1.0,  40, 550.0, SILVER, "Ricochet shield attack"),
+            Ability("Combat Combo", 0.7,  30, 90.0,  BLUE,   "Rapid martial arts"),
+            Ability("Shield Charge",3.0,  75, 250.0, WHITE,  "Unstoppable dash bash"),
+            Ability("Final Stand", 12.0, 195, 300.0, RED,    "Heroic series of blows"),
         ],
         "dodge_rate": 0.22,
         "weapon_type": "shield_only",
@@ -603,16 +629,16 @@ CHARACTER_DATA = {
     "🐾 Jungle-King": {
         "color": (40, 40, 40),
         "body_color": (150, 120, 255),
-        "hp": 480,
+        "hp": 650,
         "speed": 310,
         "mass": 2.0,
         "size": 17,
         "description": "Vibranium-enhanced warrior\nFast claws & kinetic energy",
         "abilities": [
-            Ability("Claw Slash",   0.6,  50, 80,  PURPLE, "Quick vibranium slashes"),
-            Ability("Pounce",       2.5,  65, 300, DARK_BG,"Lunging leap attack"),
-            Ability("Kinetic Burst",6.0,  90, 220, PINK,   "Releases stored energy"),
-            Ability("Panther Hunt",11.0, 170, 400, SILVER, "Stealthy rapid strikes"),
+            Ability("Claw Slash",   0.6,  30, 80.0,  PURPLE, "Quick vibranium slashes"),
+            Ability("Pounce",       2.5,  70, 300.0, DARK_BG,"Lunging leap attack"),
+            Ability("Kinetic Burst",6.0,  105, 220.0, PINK,   "Releases stored energy"),
+            Ability("Panther Hunt",11.0, 190, 400.0, SILVER, "Stealthy rapid strikes"),
         ],
         "dodge_rate": 0.3,
         "weapon_type": "claws",
@@ -621,16 +647,16 @@ CHARACTER_DATA = {
     "🧪 Toxic-Widow": {
         "color": (30, 30, 30),
         "body_color": (200, 30, 30),
-        "hp": 380,
+        "hp": 520,
         "speed": 290,
         "mass": 1.6,
         "size": 16,
         "description": "Master spy\nVenom blasts & acrobatic combat",
         "abilities": [
-            Ability("Widow Sting",  0.7,  45, 400, CYAN,   "Electric wrist blast"),
-            Ability("Toxic Mine",   3.5,  60, 300, GREEN,  "Poison gas trap"),
-            Ability("Acrobat Strike",2.0, 55, 120, RED,    "Spinning kick combo"),
-            Ability("Assassination",10.0, 160, 350, SILVER, "Precise lethal strike"),
+            Ability("Widow Sting",  0.7,  30, 400.0, CYAN,   "Electric wrist blast"),
+            Ability("Toxic Mine",   3.5,  55, 300.0, GREEN,  "Poison gas trap"),
+            Ability("Acrobat Strike",2.0, 50, 120.0, RED,    "Spinning kick combo"),
+            Ability("Assassination",10.0, 185, 350.0, SILVER, "Precise lethal strike"),
         ],
         "dodge_rate": 0.32,
         "weapon_type": "blaster",
@@ -639,16 +665,16 @@ CHARACTER_DATA = {
     "🏹 Hawk-Arrow": {
         "color": (100, 30, 150),
         "body_color": (50, 50, 100),
-        "hp": 370,
+        "hp": 510,
         "speed": 280,
         "mass": 1.6,
         "size": 15,
         "description": "Grandmaster archer\nVariety of trick arrows",
         "abilities": [
-            Ability("Sonic Arrow",  1.0,  50, 600, WHITE,  "Stuns with high sound"),
-            Ability("Exploding Tip",1.8,  85, 650, ORANGE, "Massive AOE arrow"),
-            Ability("Electric Arrow",2.5, 60, 550, YELLOW, "Chain lightning effect"),
-            Ability("Barrage",     12.0, 200, 500, PURPLE, "Rain of 20 arrows"),
+            Ability("Sonic Arrow",  1.0,  40, 600.0, WHITE,  "Stuns with high sound"),
+            Ability("Exploding Tip",1.8,  75, 650.0, ORANGE, "Massive AOE arrow"),
+            Ability("Electric Arrow",2.5, 55, 550.0, YELLOW, "Chain lightning effect"),
+            Ability("Barrage",     12.0, 195, 500.0, PURPLE, "Rain of 20 arrows"),
         ],
         "dodge_rate": 0.25,
         "weapon_type": "bow",
@@ -657,16 +683,16 @@ CHARACTER_DATA = {
     "🌀 Sorcerer-Lord": {
         "color": (200, 50, 30),
         "body_color": (30, 50, 150),
-        "hp": 360,
+        "hp": 530,
         "speed": 210,
         "mass": 1.7,
         "size": 16,
         "description": "Master of mystic arts\nShields, portals, and spells",
         "abilities": [
-            Ability("Mystic Bolt",  0.8,  60, 500, GOLD,   "Arcane energy blast"),
-            Ability("Portal Warp",  4.0,  70, 400, ORANGE, "Teleport and strike"),
-            Ability("Eldritch Whip",1.5,  55, 250, RED,    "Energy whip pull"),
-            Ability("Mirror Realm",14.0, 230, 600, PURPLE, "Bends space for damage"),
+            Ability("Mystic Bolt",  0.8,  40, 500.0, GOLD,   "Arcane energy blast"),
+            Ability("Portal Warp",  4.0,  85, 400.0, ORANGE, "Teleport and strike"),
+            Ability("Eldritch Whip",1.5,  50, 250.0, RED,    "Energy whip pull"),
+            Ability("Mirror Realm",14.0, 205, 600.0, PURPLE, "Bends space for damage"),
         ],
         "dodge_rate": 0.18,
         "weapon_type": "staff",
@@ -675,16 +701,16 @@ CHARACTER_DATA = {
     "🐜 Size-Shifter": {
         "color": (200, 30, 30),
         "body_color": (40, 40, 40),
-        "hp": 410,
+        "hp": 580,
         "speed": 260,
         "mass": 1.8,
         "size": 16,
         "description": "Pym particle user\nShrink to dodge, grow to smash",
         "abilities": [
-            Ability("Shrink Punch", 0.6,  40, 400, RED,    "Tiny but fast punch"),
-            Ability("Ant Swarm",    3.0,  70, 350, BLACK,  "Summons biting ants"),
-            Ability("Giant Stomp",  8.0, 150, 300, SILVER, "Grows huge & crushes"),
-            Ability("Disk Throw",  10.0, 120, 500, BLUE,   "Enlarges objects to hit"),
+            Ability("Shrink Punch", 0.6,  25, 400.0, RED,    "Tiny but fast punch"),
+            Ability("Ant Swarm",    3.0,  70, 350.0, BLACK,  "Summons biting ants"),
+            Ability("Giant Stomp",  8.0, 140, 300.0, SILVER, "Grows huge & crushes"),
+            Ability("Disk Throw",  10.0, 175, 500.0, BLUE,   "Enlarges objects to hit"),
         ],
         "dodge_rate": 0.35,
         "weapon_type": "fists",
@@ -693,16 +719,16 @@ CHARACTER_DATA = {
     "🌪️ Weather-Soul": {
         "color": (255, 255, 255),
         "body_color": (30, 30, 80),
-        "hp": 400,
+        "hp": 580,
         "speed": 240,
         "mass": 1.5,
         "size": 17,
         "description": "Elemental goddess\nControls wind, rain, & lighting",
         "abilities": [
-            Ability("Wind Gust",    0.8,  45, 450, CYAN,   "Pushes enemies away"),
-            Ability("Hail Storm",   3.0,  80, 500, WHITE,  "Raining ice chunks"),
-            Ability("Thunderbolt",  1.5,  95, 550, YELLOW, "Direct precise strike"),
-            Ability("Hurricane",   13.0, 210, 600, BLUE,   "Total screen storm"),
+            Ability("Wind Gust",    0.8,  30, 450.0, CYAN,   "Pushes enemies away"),
+            Ability("Hail Storm",   3.0,  80, 500.0, WHITE,  "Raining ice chunks"),
+            Ability("Thunderbolt",  1.5,  60, 550.0, YELLOW, "Direct precise strike"),
+            Ability("Hurricane",   13.0, 200, 600.0, BLUE,   "Total screen storm"),
         ],
         "dodge_rate": 0.2,
         "weapon_type": "staff",
@@ -711,16 +737,16 @@ CHARACTER_DATA = {
     "🕶️ Optic-Hero": {
         "color": (50, 50, 200),
         "body_color": (200, 180, 50),
-        "hp": 420,
+        "hp": 600,
         "speed": 220,
         "mass": 2.0,
         "size": 18,
         "description": "Field leader\nContinuous optic concussive beams",
         "abilities": [
-            Ability("Optic Blast",  0.5,  40, 700, RED,    "Fast concussive beam"),
-            Ability("Wide Beam",    2.5,  90, 500, RED,    "Wide area blast"),
-            Ability("Ricochet",     1.8,  65, 600, CRIMSON,"Bouncing beam shot"),
-            Ability("Full Power",  12.0, 250, 800, WHITE,  "Destructive mega beam"),
+            Ability("Optic Blast",  0.5,  22, 700.0, RED,    "Fast concussive beam"),
+            Ability("Wide Beam",    2.5,  75, 500.0, RED,    "Wide area blast"),
+            Ability("Ricochet",     1.8,  50, 600.0, CRIMSON,"Bouncing beam shot"),
+            Ability("Full Power",  12.0, 210, 800.0, WHITE,  "Destructive mega beam"),
         ],
         "dodge_rate": 0.15,
         "weapon_type": "blaster",
@@ -729,16 +755,16 @@ CHARACTER_DATA = {
     "🐱 Feral-Claw": {
         "color": (220, 160, 50),
         "body_color": (30, 50, 150),
-        "hp": 550,
+        "hp": 720,
         "speed": 280,
         "mass": 2.2,
         "size": 17,
         "description": "Mutant with healing factor\nAdamantium claws & berserker rage",
         "abilities": [
-            Ability("X-Slash",      0.5,  55, 80,  SILVER, "Fast claw cross-cut"),
-            Ability("Lunge",        2.0,  60, 250, BROWN,  "Lunging slash attack"),
-            Ability("Regenerate",   7.0,  0,  0,   GREEN,  "Heals significant HP"),
-            Ability("Berserker",   14.0, 200, 150, RED,    "Unstoppable claw flurry"),
+            Ability("X-Slash",      0.5,  30, 80.0,  SILVER, "Fast claw cross-cut"),
+            Ability("Lunge",        2.0,  65, 250.0, BROWN,  "Lunging slash attack"),
+            Ability("Regenerate",   7.0,  0,  0.0,   GREEN,  "Heals significant HP"),
+            Ability("Berserker",   14.0, 200, 150.0, RED,    "Unstoppable claw flurry"),
         ],
         "dodge_rate": 0.25,
         "weapon_type": "claws",
@@ -747,16 +773,16 @@ CHARACTER_DATA = {
     "🃏 Mischief-Loki": {
         "color": (50, 150, 50),
         "body_color": (200, 180, 50),
-        "hp": 400,
+        "hp": 560,
         "speed": 250,
         "mass": 2.0,
         "size": 17,
         "description": "God of Mischief\nClones, illusions, and daggers",
         "abilities": [
-            Ability("Dagger Throw", 0.6,  45, 500, SILVER, "Quick throw daggers"),
-            Ability("Illusion",     4.0,  20, 200, GREEN,  "Clones distract enemy"),
-            Ability("Scepter Blast",1.8,  75, 450, BLUE,   "Mind stone energy shot"),
-            Ability("Trickery",    12.0, 180, 400, PURPLE, "Massive illusion strike"),
+            Ability("Dagger Throw", 0.6,  30, 500.0, SILVER, "Quick throw daggers"),
+            Ability("Illusion",     4.0,  20, 200.0, GREEN,  "Clones distract enemy"),
+            Ability("Scepter Blast",1.8,  60, 450.0, BLUE,   "Mind stone energy shot"),
+            Ability("Trickery",    12.0, 185, 400.0, PURPLE, "Massive illusion strike"),
         ],
         "dodge_rate": 0.38,
         "weapon_type": "katana",
@@ -765,16 +791,16 @@ CHARACTER_DATA = {
     "💀 Ghost-Biker": {
         "color": (200, 80, 30),
         "body_color": (20, 20, 20),
-        "hp": 500,
+        "hp": 700,
         "speed": 260,
         "mass": 2.8,
         "size": 19,
         "description": "Spirit of Vengeance\nHellfire chains & hellcycle",
         "abilities": [
-            Ability("Hell-Chain",   0.8,  60, 400, ORANGE, "Flame chain whip"),
-            Ability("Penance Gaze", 5.0, 100, 150, RED,    "Stuns and burns"),
-            Ability("Hellfire",     2.5,  80, 350, CRIMSON,"AOE fire explosion"),
-            Ability("Hell-Cycle",  13.0, 200, 500, ORANGE, "Flaming bike charge"),
+            Ability("Hell-Chain",   0.8,  40, 400.0, ORANGE, "Flame chain whip"),
+            Ability("Penance Gaze", 5.0, 90, 150.0, RED,    "Stuns and burns"),
+            Ability("Hellfire",     2.5,  70, 350.0, CRIMSON,"AOE fire explosion"),
+            Ability("Hell-Cycle",  13.0, 200, 500.0, ORANGE, "Flaming bike charge"),
         ],
         "dodge_rate": 0.1,
         "weapon_type": "chain",
@@ -783,16 +809,16 @@ CHARACTER_DATA = {
     "🌳 Forest-Giant": {
         "color": (80, 150, 60),
         "body_color": (120, 90, 50),
-        "hp": 650,
+        "hp": 900,
         "speed": 170,
         "mass": 4.5,
         "size": 23,
         "description": "Sentient tree warrior\nRegeneration & vine attacks",
         "abilities": [
-            Ability("Vine Smash",   1.0,  70, 120, GREEN,  "Lashing vine sweep"),
-            Ability("Root Trap",    3.5,  40, 400, BROWN,  "Enemies can't move"),
-            Ability("Spore Heal",   8.0,  0,  0,   LIME,   "Healing spores"),
-            Ability("Tree Grow",   14.0, 210, 300, GREEN,  "Massive growth smash"),
+            Ability("Vine Smash",   1.0,  50, 120.0, GREEN,  "Lashing vine sweep"),
+            Ability("Root Trap",    3.5,  40, 400.0, BROWN,  "Enemies can't move"),
+            Ability("Spore Heal",   8.0,  0,  0.0,   LIME,   "Healing spores"),
+            Ability("Tree Grow",   14.0, 210, 300.0, GREEN,  "Massive growth smash"),
         ],
         "dodge_rate": 0.04,
         "weapon_type": "fists",
@@ -801,16 +827,16 @@ CHARACTER_DATA = {
     "🦝 Space-Raccoon": {
         "color": (100, 80, 60),
         "body_color": (50, 100, 200),
-        "hp": 340,
+        "hp": 520,
         "speed": 270,
         "mass": 1.4,
         "size": 14,
         "description": "Ordnance expert\nHeavy weapons & explosives",
         "abilities": [
-            Ability("Blaster",      0.5,  40, 600, ORANGE, "Rapid laser fire"),
-            Ability("Sticky Grenade",2.0, 80, 450, RED,    "Delayed explosion"),
-            Ability("Machine Gun",  5.0, 120, 550, YELLOW, "Hail of bullets"),
-            Ability("The Big One", 14.0, 280, 650, WHITE,  "Massive experimental bomb"),
+            Ability("Blaster",      0.5,  22, 600.0, ORANGE, "Rapid laser fire"),
+            Ability("Sticky Grenade",2.0, 70, 450.0, RED,    "Delayed explosion"),
+            Ability("Machine Gun",  5.0, 100, 550.0, YELLOW, "Hail of bullets"),
+            Ability("The Big One", 14.0, 210, 650.0, WHITE,  "Massive experimental bomb"),
         ],
         "dodge_rate": 0.3,
         "weapon_type": "blaster",
@@ -819,16 +845,16 @@ CHARACTER_DATA = {
     "🌟 Cosmic-Nova": {
         "color": (255, 255, 100),
         "body_color": (50, 80, 200),
-        "hp": 460,
+        "hp": 660,
         "speed": 250,
         "mass": 2.5,
         "size": 18,
         "description": "Cosmic powerhouse\nEnergy blasts & flight",
         "abilities": [
-            Ability("Photon Blast", 0.7,  65, 550, YELLOW, "Concentrated energy"),
-            Ability("Cosmic Dash",  2.5,  75, 350, CYAN,   "High-speed tackle"),
-            Ability("Energy Shield",6.0,  10, 100, WHITE,  "Temporary invincibility"),
-            Ability("Binary Power",13.0, 250, 500, GOLD,   "Full cosmic release"),
+            Ability("Photon Blast", 0.7,  40, 550.0, YELLOW, "Concentrated energy"),
+            Ability("Cosmic Dash",  2.5,  65, 350.0, CYAN,   "High-speed tackle"),
+            Ability("Energy Shield",6.0,  0, 100.0, WHITE,  "Temporary invincibility"),
+            Ability("Binary Power",13.0, 205, 500.0, GOLD,   "Full cosmic release"),
         ],
         "dodge_rate": 0.15,
         "weapon_type": "fists",
@@ -837,16 +863,16 @@ CHARACTER_DATA = {
     "🔱 Trident-Hero": {
         "color": (0, 150, 150),
         "body_color": (200, 150, 50),
-        "hp": 520,
+        "hp": 740,
         "speed": 230,
         "mass": 3.0,
         "size": 20,
         "description": "King of the deep\nWater control & trident master",
         "abilities": [
-            Ability("Trident Stab", 0.8,  65, 100, SILVER, "Quick triple thrust"),
-            Ability("Water Wave",   2.5,  70, 400, BLUE,   "Tidal surge push"),
-            Ability("Shark Call",   6.0,  90, 450, TEAL,   "Summons a spectral shark"),
-            Ability("Ocean Wrath", 12.0, 210, 500, BLUE,   "Massive whirlpool"),
+            Ability("Trident Stab", 0.8,  40, 100.0, SILVER, "Quick triple thrust"),
+            Ability("Water Wave",   2.5,  70, 400.0, BLUE,   "Tidal surge push"),
+            Ability("Shark Call",   6.0,  90, 450.0, TEAL,   "Summons a spectral shark"),
+            Ability("Ocean Wrath", 12.0, 200, 500.0, BLUE,   "Massive whirlpool"),
         ],
         "weapon_type": "trident",
         "has_shield": False
@@ -854,16 +880,16 @@ CHARACTER_DATA = {
     "🦇 Dark-Hero": {
         "color": (20, 20, 20),
         "body_color": (80, 80, 80),
-        "hp": 450,
+        "hp": 640,
         "speed": 280,
         "mass": 2.2,
         "size": 18,
         "description": "Detective & vigilante\nGadgets and martial arts",
         "abilities": [
-            Ability("Batarang",     0.6,  40, 500, SILVER, "Quick throwing weapon"),
-            Ability("Smoke Pellets",4.0,  20, 200, (100,100,100), "Confuses enemies"),
-            Ability("Grapple Kick", 2.5,  65, 350, BLACK,  "Pull and kick combo"),
-            Ability("The Knight",  12.0, 190, 400, DARK_BG,"Perfect combat series"),
+            Ability("Batarang",     0.6,  28, 500.0, SILVER, "Quick throwing weapon"),
+            Ability("Smoke Pellets",4.0,  20, 200.0, (100,100,100), "Confuses enemies"),
+            Ability("Grapple Kick", 2.5,  65, 350.0, BLACK,  "Pull and kick combo"),
+            Ability("The Knight",  12.0, 185, 400.0, DARK_BG,"Perfect combat series"),
         ],
         "dodge_rate": 0.3,
         "weapon_type": "katana",
@@ -872,32 +898,32 @@ CHARACTER_DATA = {
     "🏃 Sonic-Speed": {
         "color": (220, 30, 30),
         "body_color": (255, 255, 100),
-        "hp": 380,
+        "hp": 480,
         "speed": 450,
         "mass": 1.5,
         "size": 16,
         "description": "Fastest man alive\nExtreme speed & sonic booms",
         "abilities": [
-            Ability("Speed Punch",  0.4,  35, 100, YELLOW, "Ultra-fast punches"),
-            Ability("Sonic Boom",   3.0,  70, 300, WHITE,  "Dash creates shockwave"),
-            Ability("Lightning Rim",6.0,  85, 400, BLUE,   "Circular speed attack"),
-            Ability("Infinite Mass",14.0, 260, 200, GOLD,  "The ultimate punch"),
+            Ability("Speed Punch",  0.4,  18, 100.0, YELLOW, "Ultra-fast punches"),
+            Ability("Sonic Boom",   3.0,  70, 300.0, WHITE,  "Dash creates shockwave"),
+            Ability("Lightning Rim",6.0,  90, 400.0, BLUE,   "Circular speed attack"),
+            Ability("Infinite Mass",14.0, 210, 200.0, GOLD,  "The ultimate punch"),
         ],
         "dodge_rate": 0.4
     },
     "🦅 Wing-Soldier": {
         "color": (200, 30, 30),
         "body_color": (150, 150, 150),
-        "hp": 430,
+        "hp": 620,
         "speed": 340,
         "mass": 2.0,
         "size": 17,
         "description": "Aerial combatant\nWings & tactical drones",
         "abilities": [
-            Ability("Wing Slash",   0.7,  50, 150, SILVER, "Blade-wing strike"),
-            Ability("Redwing",      3.0,  55, 500, RED,    "Support drone laser"),
-            Ability("Dive Bomb",    4.0,  80, 400, DARK_BG,"Diving tackle"),
-            Ability("Air Strike",  11.0, 180, 500, WHITE,  "Full aerial assault"),
+            Ability("Wing Slash",   0.7,  32, 150.0, SILVER, "Blade-wing strike"),
+            Ability("Redwing",      3.0,  65, 500.0, RED,    "Support drone laser"),
+            Ability("Dive Bomb",    4.0,  80, 400.0, DARK_BG,"Diving tackle"),
+            Ability("Air Strike",  11.0, 190, 500.0, WHITE,  "Full aerial assault"),
         ],
         "dodge_rate": 0.28,
         "weapon_type": "katana",
@@ -906,16 +932,16 @@ CHARACTER_DATA = {
     "🧚 Wasp-Hero": {
         "color": (220, 200, 30),
         "body_color": (30, 30, 30),
-        "hp": 350,
+        "hp": 480,
         "speed": 360,
         "mass": 1.2,
         "size": 14,
         "description": "Miniature fighter\nBio-stings & rapid flight",
         "abilities": [
-            Ability("Bio-Sting",    0.5,  40, 450, YELLOW, "Rapid energy stingers"),
-            Ability("Swarm",        3.5,  65, 300, GOLD,   "Dashing multiple hits"),
-            Ability("Tiny Fury",    6.0,  80, 200, WHITE,  "Frenzy of small attacks"),
-            Ability("Stinger Rain",12.0, 190, 500, YELLOW, "Massive sting barrage"),
+            Ability("Bio-Sting",    0.5,  20, 450.0, YELLOW, "Rapid energy stingers"),
+            Ability("Swarm",        3.5,  65, 300.0, GOLD,   "Dashing multiple hits"),
+            Ability("Tiny Fury",    6.0,  85, 200.0, WHITE,  "Frenzy of small attacks"),
+            Ability("Stinger Rain",12.0, 185, 500.0, YELLOW, "Massive sting barrage"),
         ],
         "dodge_rate": 0.45,
         "weapon_type": "blaster",
@@ -924,16 +950,16 @@ CHARACTER_DATA = {
     "🧱 Rock-Tank": {
         "color": (150, 100, 80),
         "body_color": (100, 80, 60),
-        "hp": 700,
+        "hp": 980,
         "speed": 180,
         "mass": 4.8,
         "size": 24,
         "description": "Solid stone hero\nIncredible defense & strength",
         "abilities": [
-            Ability("Stone Fist",   1.0,  85, 100, BROWN,  "Heavy rock punch"),
-            Ability("Clobberin Time",3.5, 100, 150, ORANGE, "Massive impact strike"),
-            Ability("Earthquake",   6.0,  70, 350, SILVER, "Stuns nearby enemies"),
-            Ability("Boulder Throw",12.0, 220, 600, BROWN,  "Yeets a huge rock"),
+            Ability("Stone Fist",   1.0,  55, 100.0, BROWN,  "Heavy rock punch"),
+            Ability("Clobberin Time",3.5, 90, 150.0, ORANGE, "Massive impact strike"),
+            Ability("Earthquake",   6.0,  100, 350.0, SILVER, "Stuns nearby enemies"),
+            Ability("Boulder Throw",12.0, 215, 600.0, BROWN,  "Yeets a huge rock"),
         ],
         "dodge_rate": 0.03,
         "weapon_type": "fists",
@@ -942,16 +968,16 @@ CHARACTER_DATA = {
     "🔥 Fire-Burst": {
         "color": (255, 100, 30),
         "body_color": (255, 230, 50),
-        "hp": 400,
-        "speed": 280,
+        "hp": 560,
+        "speed": 270,
         "mass": 1.6,
         "size": 16,
         "description": "Living flame\nFire manipulation & flight",
         "abilities": [
-            Ability("Flame On",     1.0,  40, 300, ORANGE, "Passive burn damage"),
-            Ability("Fireball",     0.8,  60, 500, RED,    "Projected fire"),
-            Ability("Nova Blast",   7.0, 140, 400, GOLD,   "Explosive fire release"),
-            Ability("Supernova",   15.0, 300, 600, WHITE,  "Full power explosion"),
+            Ability("Flame On",     1.0,  30, 300.0, ORANGE, "Passive burn damage"),
+            Ability("Fireball",     0.8,  28, 500.0, RED,    "Projected fire"),
+            Ability("Nova Blast",   7.0, 105, 400.0, GOLD,   "Explosive fire release"),
+            Ability("Supernova",   15.0, 215, 600.0, WHITE,  "Full power explosion"),
         ],
         "dodge_rate": 0.2,
         "weapon_type": "fists",
@@ -960,16 +986,16 @@ CHARACTER_DATA = {
     "🧞 Genie-Magic": {
         "color": (80, 180, 255),
         "body_color": (200, 150, 50),
-        "hp": 440,
+        "hp": 620,
         "speed": 220,
         "mass": 2.0,
         "size": 18,
         "description": "Cosmic genie\nWishes and magic smoke",
         "abilities": [
-            Ability("Magic Lamp",   0.9,  60, 450, GOLD,   "Blasts magic smoke"),
-            Ability("Giant Hands",  3.0,  80, 200, CYAN,   "Smack from above"),
-            Ability("Wish Grant",   8.0,  0,  0,   PINK,   "Random buff/heal"),
-            Ability("Phenomenal",  13.0, 210, 500, PURPLE, "Ultimate magic show"),
+            Ability("Magic Lamp",   0.9,  38, 450.0, GOLD,   "Blasts magic smoke"),
+            Ability("Giant Hands",  3.0,  80, 200.0, CYAN,   "Smack from above"),
+            Ability("Wish Grant",   8.0,  0,  0.0,   PINK,   "Random buff/heal"),
+            Ability("Phenomenal",  13.0, 200, 500.0, PURPLE, "Ultimate magic show"),
         ],
         "dodge_rate": 0.25,
         "weapon_type": "fists",
@@ -978,16 +1004,16 @@ CHARACTER_DATA = {
     "🧟 Plague-Walker": {
         "color": (150, 180, 100),
         "body_color": (80, 100, 60),
-        "hp": 500,
+        "hp": 700,
         "speed": 150,
         "mass": 2.5,
         "size": 18,
         "description": "Undead plague\nInfects and survives",
         "abilities": [
-            Ability("Bite",         0.7,  40, 80,  LIME,   "Infects with poison"),
-            Ability("Vomit",        2.5,  55, 300, GREEN,  "Acid splash DOT"),
-            Ability("Horde Call",   6.0,  70, 400, BROWN,  "Summons small zombies"),
-            Ability("Undead Rage", 12.0, 180, 250, RED,    "Frenzy of bites"),
+            Ability("Bite",         0.7,  30, 80.0,  LIME,   "Infects with poison"),
+            Ability("Vomit",        2.5,  65, 300.0, GREEN,  "Acid splash DOT"),
+            Ability("Horde Call",   6.0,  90, 400.0, BROWN,  "Summons small zombies"),
+            Ability("Undead Rage", 12.0, 195, 250.0, RED,    "Frenzy of bites"),
         ],
         "dodge_rate": 0.05,
         "weapon_type": "fists",
@@ -996,16 +1022,16 @@ CHARACTER_DATA = {
     "🛸 Void-Traveler": {
         "color": (100, 255, 200),
         "body_color": (40, 60, 100),
-        "hp": 420,
+        "hp": 610,
         "speed": 230,
         "mass": 1.8,
         "size": 17,
         "description": "Alien voyager\nAdvanced tech and beams",
         "abilities": [
-            Ability("Ray Gun",      0.6,  45, 550, CYAN,   "Plasma energy shot"),
-            Ability("Abduction",    4.0,  60, 300, WHITE,  "Lifts enemy up"),
-            Ability("Gravity Bomb", 5.0,  75, 400, PURPLE, "Crushes with gravity"),
-            Ability("Mothership",  13.0, 240, 600, LIME,   "Full ship bombardment"),
+            Ability("Ray Gun",      0.6,  28, 550.0, CYAN,   "Plasma energy shot"),
+            Ability("Abduction",    4.0,  80, 300.0, WHITE,  "Lifts enemy up"),
+            Ability("Gravity Bomb", 5.0,  95, 400.0, PURPLE, "Crushes with gravity"),
+            Ability("Mothership",  13.0, 205, 600.0, LIME,   "Full ship bombardment"),
         ],
         "dodge_rate": 0.18,
         "weapon_type": "blaster",
@@ -1014,16 +1040,16 @@ CHARACTER_DATA = {
     "🏴‍☠️ Pirate-King": {
         "color": (160, 30, 30),
         "body_color": (50, 40, 40),
-        "hp": 480,
+        "hp": 700,
         "speed": 240,
         "mass": 2.4,
         "size": 18,
         "description": "King of the seas\nCannons and scimitar",
         "abilities": [
-            Ability("Scimitar",     0.7,  50, 90,  SILVER, "Masterful sword cut"),
-            Ability("Pistol Shot",  1.5,  65, 500, DARK_BG,"Lead bullet shot"),
-            Ability("Cannonade",    5.0,  95, 550, BLACK,  "Fire the ship's big gun"),
-            Ability("Kraken",      14.0, 260, 450, BLUE,   "Summons the beast"),
+            Ability("Scimitar",     0.7,  35, 90.0,  SILVER, "Masterful sword cut"),
+            Ability("Pistol Shot",  1.5,  55, 500.0, DARK_BG,"Lead bullet shot"),
+            Ability("Cannonade",    5.0,  95, 550.0, BLACK,  "Fire the ship's big gun"),
+            Ability("Kraken",      14.0, 210, 450.0, BLUE,   "Summons the beast"),
         ],
         "dodge_rate": 0.15,
         "weapon_type": "sword",
@@ -1032,19 +1058,365 @@ CHARACTER_DATA = {
     "🤺 Shadow-Knight": {
         "color": (60, 60, 70),
         "body_color": (40, 40, 50),
-        "hp": 460,
+        "hp": 640,
         "speed": 300,
         "mass": 1.9,
         "size": 17,
         "description": "Cursed ronin\nShadow blades & speed",
         "abilities": [
-            Ability("Shadow Slash", 0.5,  50, 90,  PURPLE, "Ultra-fast cut"),
-            Ability("Dark Dash",    2.5,  60, 350, BLACK,  "Phases through enemy"),
-            Ability("Soul Reaper",  6.0,  90, 150, CRIMSON,"Health drain strike"),
-            Ability("Nightfall",   12.0, 220, 500, TEAL,   "Total darkness flurry"),
+            Ability("Shadow Slash", 0.5,  28, 90.0,  PURPLE, "Ultra-fast cut"),
+            Ability("Dark Dash",    2.5,  70, 350.0, BLACK,  "Phases through enemy"),
+            Ability("Soul Reaper",  6.0,  100, 150.0, CRIMSON,"Health drain strike"),
+            Ability("Nightfall",   12.0, 200, 500.0, TEAL,   "Total darkness flurry"),
         ],
-        "dodge_rate": 0.35,
+        "dodge_rate": 0.25,
         "weapon_type": "katana",
+        "has_shield": False
+    },
+
+    # ═══════════════════════════════════════════
+    # NEW SPECIAL CHARACTERS
+    # ═══════════════════════════════════════════
+
+    "👁️ Phantom": {
+        "color": (180, 100, 255),
+        "body_color": (100, 40, 180),
+        "hp": 520,
+        "speed": 300,
+        "mass": 1.4,
+        "size": 16,
+        "description": "Interdimensional ghost\nTeleports constantly, phases through reality",
+        "abilities": [
+            Ability("Phase Blink",   0.6,  25, 400, PURPLE, "Teleports behind enemy and strikes"),
+            Ability("Ghost Strike",  1.8,  65, 300, (180,100,255), "Phases through defenses"),
+            Ability("Void Step",     4.0,  85, 500, (100,0,200), "Multi-blink confusion attack"),
+            Ability("Phantom Surge",12.0, 200, 350, WHITE,  "Reality-shattering teleport barrage"),
+        ],
+        "dodge_rate": 0.40,
+        "weapon_type": "katana",
+        "has_shield": False
+    },
+
+    "⏰ Time-Lord": {
+        "color": (200, 180, 50),
+        "body_color": (80, 60, 20),
+        "hp": 580,
+        "speed": 220,
+        "mass": 1.8,
+        "size": 17,
+        "description": "Master of time and space\nSlows enemies, rewinds self",
+        "abilities": [
+            Ability("Time Bolt",     0.8,  35, 500, GOLD,   "Temporal projectile"),
+            Ability("Slow Field",    3.0,  55, 300, YELLOW, "Slows enemy in time bubble"),
+            Ability("Rewind",        6.0,   0,   0, CYAN,   "Rewinds own HP to 10s ago"),
+            Ability("Timestop",     13.0, 205, 400, WHITE,  "Freezes enemy, then massive hit"),
+        ],
+        "dodge_rate": 0.18,
+        "weapon_type": "staff",
+        "has_shield": False
+    },
+
+    "💀 Necromancer": {
+        "color": (80, 200, 80),
+        "body_color": (30, 50, 30),
+        "hp": 500,
+        "speed": 190,
+        "mass": 1.9,
+        "size": 16,
+        "description": "Master of undeath\nRaises fallen, curses enemies",
+        "abilities": [
+            Ability("Cursed Bolt",   0.8,  30, 450, (80,200,80), "Spreading curse projectile"),
+            Ability("Death Touch",   2.5,  70, 100, (50,150,50), "Rotting melee strike"),
+            Ability("Plague Cloud",  5.0,  90, 300, LIME,   "Toxic AOE cloud"),
+            Ability("Army of Dead", 14.0, 210, 500, (100,255,100), "Summons bone barrage"),
+        ],
+        "dodge_rate": 0.15,
+        "weapon_type": "staff",
+        "has_shield": False
+    },
+
+    "🪞 Mirror-Mage": {
+        "color": (200, 220, 255),
+        "body_color": (100, 120, 200),
+        "hp": 540,
+        "speed": 210,
+        "mass": 1.7,
+        "size": 16,
+        "description": "Reality reflector\nReflects damage, creates clones",
+        "abilities": [
+            Ability("Mirror Shard", 0.7,  30, 500, (200,220,255), "Bouncing mirror projectile"),
+            Ability("Reflect",      3.0,  55, 200, WHITE,  "Reflects next attack back"),
+            Ability("Clone Army",   6.0,  80, 300, SILVER, "3 mirror clones distract enemy"),
+            Ability("Prism Burst", 12.0, 200, 500, WHITE,  "Shatters into blinding shards"),
+        ],
+        "dodge_rate": 0.22,
+        "weapon_type": "staff",
+        "has_shield": False
+    },
+
+    "🌑 Black-Hole": {
+        "color": (50, 0, 80),
+        "body_color": (20, 0, 40),
+        "hp": 620,
+        "speed": 180,
+        "mass": 3.0,
+        "size": 19,
+        "description": "Singularity incarnate\nPulls enemies in, crushes with gravity",
+        "abilities": [
+            Ability("Gravity Pull", 0.9,  35, 450, (100,0,150), "Yanks enemy toward self"),
+            Ability("Event Horizon",2.5,  70, 300, PURPLE, "Gravity well circles self"),
+            Ability("Dark Matter",  5.0,  95, 400, (50,0,80),  "Dense energy bomb"),
+            Ability("Singularity", 14.0, 215, 500, BLACK,  "Collapse — massive gravity crush"),
+        ],
+        "dodge_rate": 0.10,
+        "weapon_type": "fists",
+        "has_shield": False
+    },
+
+    "⚗️ Alchemist": {
+        "color": (200, 150, 30),
+        "body_color": (100, 60, 20),
+        "hp": 560,
+        "speed": 210,
+        "mass": 1.9,
+        "size": 17,
+        "description": "Potion-flinging scientist\nPoisons, explosions, transmutation",
+        "abilities": [
+            Ability("Acid Flask",    0.7,  30, 450, (150,200,50), "Splashes poison acid"),
+            Ability("Fire Potion",   1.5,  60, 500, ORANGE, "Explosive fire vial"),
+            Ability("Transmute",     5.0,  85, 200, GOLD,   "Turns enemy weak temporarily"),
+            Ability("Grand Elixir", 13.0, 205, 400, PURPLE, "Ultimate multi-element bomb"),
+        ],
+        "dodge_rate": 0.17,
+        "weapon_type": "blaster",
+        "has_shield": False
+    },
+
+    "🧲 Magnetar": {
+        "color": (100, 200, 255),
+        "body_color": (50, 80, 150),
+        "hp": 640,
+        "speed": 210,
+        "mass": 2.5,
+        "size": 18,
+        "description": "Magnetic powerhouse\nAttracts and repels with massive force",
+        "abilities": [
+            Ability("Magnetic Pull", 0.8,  30, 400, BLUE,   "Pulls enemy violently close"),
+            Ability("Repulse Blast", 1.8,  60, 300, CYAN,   "Blasts enemy far away"),
+            Ability("Iron Storm",    5.0,  90, 450, SILVER, "Magnetic shrapnel barrage"),
+            Ability("Polarity Flip",13.0, 210, 500, WHITE,  "Massive EM pulse reversal"),
+        ],
+        "dodge_rate": 0.13,
+        "weapon_type": "fists",
+        "has_shield": False
+    },
+
+    "🌊 Tsunami": {
+        "color": (0, 150, 220),
+        "body_color": (0, 80, 150),
+        "hp": 700,
+        "speed": 200,
+        "mass": 2.8,
+        "size": 19,
+        "description": "Living tidal force\nCrashes into foes with wall of water",
+        "abilities": [
+            Ability("Water Jet",     0.7,  28, 500, BLUE,   "High-pressure water beam"),
+            Ability("Riptide",       2.0,  65, 350, CYAN,   "Sweeping current slash"),
+            Ability("Wave Crash",    4.0,  95, 300, BLUE,   "Wall of water smash"),
+            Ability("Mega Tsunami", 13.0, 210, 500, (0,100,200), "Arena-wide tidal surge"),
+        ],
+        "dodge_rate": 0.12,
+        "weapon_type": "staff",
+        "has_shield": False
+    },
+
+    "🎯 Bounty-Hunter": {
+        "color": (150, 120, 50),
+        "body_color": (80, 60, 20),
+        "hp": 600,
+        "speed": 260,
+        "mass": 2.0,
+        "size": 17,
+        "description": "Ruthless tracker\nMarks targets, traps, and precision shots",
+        "abilities": [
+            Ability("Stun Dart",     0.6,  22, 600, BROWN,  "Fast blowgun dart"),
+            Ability("Trip Mine",     2.5,  75, 350, ORANGE, "Proximity explosive trap"),
+            Ability("Headshot",      3.5,  95, 700, SILVER, "Pinpoint lethal shot"),
+            Ability("Obliterate",   12.0, 205, 600, RED,    "Full arsenal discharge"),
+        ],
+        "dodge_rate": 0.25,
+        "weapon_type": "blaster",
+        "has_shield": False
+    },
+
+    "🔮 Crystal-Witch": {
+        "color": (180, 80, 220),
+        "body_color": (100, 30, 140),
+        "hp": 490,
+        "speed": 215,
+        "mass": 1.6,
+        "size": 15,
+        "description": "Dark crystal magic\nCrystal spikes, hexes, and curses",
+        "abilities": [
+            Ability("Crystal Bolt", 0.7,  28, 480, (180,80,220), "Piercing crystal shard"),
+            Ability("Hex Curse",    2.5,  60, 300, PINK,   "Weakens enemy defenses"),
+            Ability("Crystal Cage", 5.0,  85, 350, PURPLE, "Traps enemy in crystal"),
+            Ability("Dark Ritual", 13.0, 205, 400, (100,0,150), "Sacrifices HP for massive blast"),
+        ],
+        "dodge_rate": 0.22,
+        "weapon_type": "staff",
+        "has_shield": False
+    },
+
+    "🌋 Lava-Titan": {
+        "color": (220, 80, 20),
+        "body_color": (100, 30, 10),
+        "hp": 920,
+        "speed": 165,
+        "mass": 4.5,
+        "size": 23,
+        "description": "Molten behemoth\nLeaves lava trails, erupts in fire",
+        "abilities": [
+            Ability("Lava Fist",     1.0,  55, 100, ORANGE, "Burning melee strike"),
+            Ability("Magma Hurl",    2.0,  70, 450, RED,    "Lobs molten rock"),
+            Ability("Eruption",      6.0, 110, 300, GOLD,   "Volcanic AOE explosion"),
+            Ability("Caldera",      14.0, 215, 500, (220,80,20), "Total volcanic release"),
+        ],
+        "dodge_rate": 0.04,
+        "weapon_type": "fists",
+        "has_shield": False
+    },
+
+    "🦋 Psionic": {
+        "color": (180, 100, 220),
+        "body_color": (220, 150, 255),
+        "hp": 490,
+        "speed": 250,
+        "mass": 1.5,
+        "size": 15,
+        "description": "Telekinetic mind warrior\nMoves enemies with thought alone",
+        "abilities": [
+            Ability("Mind Bolt",     0.6,  22, 500, PINK,   "Psychic energy shot"),
+            Ability("Telekinesis",   2.0,  65, 400, (180,100,220), "Hurls enemy across arena"),
+            Ability("Mind Crush",    4.5,  90, 350, PURPLE, "Psychic implosion"),
+            Ability("Psionic Storm",13.0, 200, 600, WHITE,  "Telepathic barrage of pain"),
+        ],
+        "dodge_rate": 0.30,
+        "weapon_type": "staff",
+        "has_shield": False
+    },
+
+    "🐺 Werewolf": {
+        "color": (140, 110, 80),
+        "body_color": (80, 60, 40),
+        "hp": 680,
+        "speed": 310,
+        "mass": 2.2,
+        "size": 18,
+        "description": "Moon-cursed beast\nFeral speed, howl, regenerates",
+        "abilities": [
+            Ability("Rend",          0.5,  25, 90,  BROWN,  "Brutal claw tear"),
+            Ability("Pounce",        2.0,  70, 300, (140,110,80), "Leaping lunge attack"),
+            Ability("Howl",          5.0,  30, 250, WHITE,  "Intimidating AOE roar"),
+            Ability("Full Moon Rage",12.0, 205, 200, SILVER, "Unstoppable bestial frenzy"),
+        ],
+        "dodge_rate": 0.28,
+        "weapon_type": "claws",
+        "has_shield": False
+    },
+
+    "⚡ Stormborn": {
+        "color": (100, 180, 255),
+        "body_color": (30, 60, 120),
+        "hp": 540,
+        "speed": 290,
+        "mass": 1.6,
+        "size": 16,
+        "description": "Born from lightning\nElectric dashes, charge attacks",
+        "abilities": [
+            Ability("Spark Shot",    0.5,  22, 550, YELLOW, "Fast electric bolt"),
+            Ability("Thunder Dash",  2.0,  65, 350, CYAN,   "Lightning speed charge"),
+            Ability("Ball Lightning",4.0,  90, 400, WHITE,  "Bouncing electric orb"),
+            Ability("Supercell",    12.0, 200, 500, (100,180,255), "Massive storm discharge"),
+        ],
+        "dodge_rate": 0.28,
+        "weapon_type": "blaster",
+        "has_shield": False
+    },
+
+    "🏯 Samurai": {
+        "color": (220, 180, 100),
+        "body_color": (50, 50, 80),
+        "hp": 660,
+        "speed": 270,
+        "mass": 2.1,
+        "size": 17,
+        "description": "Honorable blade master\nPerfect counters and iaijutsu",
+        "abilities": [
+            Ability("Iai Strike",    0.5,  28, 150, SILVER, "Lightning-fast draw cut"),
+            Ability("Parry",         3.0,  70, 100, GOLD,   "Deflects attack and counters"),
+            Ability("Blade Storm",   4.5,  95, 200, (220,180,100), "Spinning sword hurricane"),
+            Ability("Seppuku Edge", 13.0, 210, 300, CRIMSON,"Ultimate sacrificial slash"),
+        ],
+        "dodge_rate": 0.30,
+        "weapon_type": "katana",
+        "has_shield": False
+    },
+
+    "🔫 Gunsmith": {
+        "color": (180, 130, 60),
+        "body_color": (100, 70, 30),
+        "hp": 610,
+        "speed": 240,
+        "mass": 2.2,
+        "size": 17,
+        "description": "Master weapons engineer\nBuilds guns, turrets and fires on demand",
+        "abilities": [
+            Ability("Quick Draw",    0.5,  25, 650, (180,130,60), "Rapid pistol shot"),
+            Ability("Deploy Turret", 3.5,  65, 500, SILVER,  "Plants auto-firing gun on stage"),
+            Ability("Shotgun Blast", 2.0,  80, 200, ORANGE,  "Point-blank spread shot"),
+            Ability("Gatling Storm",13.0, 205, 600, RED,     "Rains down 20 bullets"),
+        ],
+        "dodge_rate": 0.20,
+        "weapon_type": "blaster",
+        "has_shield": False
+    },
+
+    "🏗️ Architect": {
+        "color": (120, 170, 220),
+        "body_color": (60, 90, 140),
+        "hp": 720,
+        "speed": 205,
+        "mass": 2.8,
+        "size": 18,
+        "description": "Tactical builder\nErects walls for cover, defence and crushing",
+        "abilities": [
+            Ability("Stone Throw",   0.7,  28, 400, (120,170,220), "Hurls a brick as projectile"),
+            Ability("Build Wall",    3.0,  40, 250, SILVER,  "Raises a blocking wall near enemy"),
+            Ability("Fortify",       5.0,   0,   0, BLUE,    "Hardens self — gains shield"),
+            Ability("Wall Collapse",12.0, 210, 350, BROWN,   "Smashes all walls into enemies"),
+        ],
+        "dodge_rate": 0.10,
+        "weapon_type": "fists",
+        "has_shield": True
+    },
+
+    "👥 Clone-Master": {
+        "color": (80, 220, 200),
+        "body_color": (40, 140, 130),
+        "hp": 540,
+        "speed": 250,
+        "mass": 1.8,
+        "size": 16,
+        "description": "Shape-shifting duplicator\nSpawns clones that fight independently",
+        "abilities": [
+            Ability("Shadow Punch",  0.6,  28, 120, (80,220,200), "Quick melee strike"),
+            Ability("Spawn Clone",   4.0,  55, 300, TEAL,    "Creates a fighting clone"),
+            Ability("Twin Strike",   2.5,  70, 250, CYAN,    "Clone and self attack together"),
+            Ability("Clone Army",   13.0, 205, 400, WHITE,   "Spawns 4 clones at once"),
+        ],
+        "dodge_rate": 0.28,
+        "weapon_type": "fists",
         "has_shield": False
     },
 
@@ -1066,13 +1438,6 @@ class Fighter:
         self.particles  = particles
         self.abilities  = [Ability(a.name, a.cooldown, a.damage, a.range,
                                    a.color, a.description) for a in data["abilities"]]
-        self.hidden_trait = random.choice(["RAGE", "SHIELD", "LUCK", "SPEED"])
-        self.trait_active = False # One-time per health gate for some, timed for others
-        self.trait_timer = 0.0
-        self.trait_label_txt = ""
-        self.trait_label_timer = 0.0
-
-        # Ability cooldowns
         self.dodge_rate = data.get("dodge_rate", 0.1)
         self.weapon_type = data.get("weapon_type", "fists")
         self.has_shield = data.get("has_shield", False)
@@ -1106,6 +1471,8 @@ class Fighter:
         self.shape = pymunk.Circle(self.body, data["size"])
         self.shape.elasticity = 0.5
         self.shape.friction   = 0.5
+        self.shape.collision_type = 1 # Fighter type
+        self.shape.fighter = self # Self reference for collision callbacks
         self.shape.filter     = pymunk.ShapeFilter()  # Collide with everything
         space.add(self.body, self.shape)
 
@@ -1183,10 +1550,28 @@ class Fighter:
                 self.battle_ref.hit_stop = 0.12 # 120ms freeze for massive hits
                 self.battle_ref.impact_flash = 0.05 # Brief screen flash
             
+            # ── IMPACT PARTICLES ──
+            self.particles.emit_impact(self.x, self.y, RED if dmg > 40 else (WHITE if random.random()<0.5 else self.color), count=int(dmg/10)+5)
+            for _ in range(3):
+                sang = random.uniform(0, math.pi*2)
+                self.particles.emit_beam(self.x, self.y, self.x + math.cos(sang)*50, self.y + math.sin(sang)*50, WHITE, count=4)
+
             self.battle_ref.sounds.play('hit')
 
-        self.hit_flash = 0.25
-        self.invincible_timer = 0.12
+        self.hit_flash = 0.3
+        self.invincible_timer = 0.15
+        
+        # ── RE-ENGAGEMENT AI ──
+        if dmg > 10:
+            self.ai_state = "scramble"
+            self.ai_timer = random.uniform(0.6, 1.1) # Time before re-engaging
+        
+        # ── DYNAMIC KNOCKBACK ENHANCEMENT ──
+        if attacker and knockback_x == 0:
+            kb_dx = self.x - attacker.x
+            if kb_dx == 0: kb_dx = random.choice([-1, 1])
+            knockback_x = (kb_dx/abs(kb_dx)) * 380
+        
         # Apply physics knockback
         self.body.velocity = (
             self.body.velocity.x + knockback_x,
@@ -1257,25 +1642,25 @@ class Fighter:
             if self.x < r.left + margin:
                 self.body.position = (r.left + margin + 2, self.body.position.y)
                 impulse_x = 1200
-                impact = True
+                impact = "thud"
             elif self.x > r.right - margin:
                 self.body.position = (r.right - margin - 2, self.body.position.y)
                 impulse_x = -1200
-                impact = True
+                impact = "thud"
                 
             if self.y < r.top + margin:
                 self.body.position = (self.body.position.x, r.top + margin + 2)
                 impulse_y = 1200
-                impact = True
+                if not impact: impact = "thud"
             elif self.y > r.bottom - margin:
                 self.body.position = (self.body.position.x, r.bottom - margin - 2)
                 impulse_y = -1800 
-                impact = True
+                impact = "jump"
 
             if impact:
                 self.body.apply_impulse_at_local_point((impulse_x, impulse_y))
                 self.particles.emit_ring(self.x, self.y, SILVER, count=12, speed=350, size=6, life=0.5)
-                if hasattr(self.battle_ref, 'sounds'): self.battle_ref.sounds.play('thud')
+                if hasattr(self.battle_ref, 'sounds'): self.battle_ref.sounds.play(impact)
                 self.ai_timer = max(self.ai_timer, 0.4)
                 self.body.velocity *= 1.3
 
@@ -1368,108 +1753,142 @@ class Fighter:
                 self.particles.emit(self.x, self.y, GREEN, count=1, gravity=False)
 
     def _run_ai(self, dt, projectiles):
-        t = self.ai_target
+        t_aim = self.ai_target
+        t_move = self.ai_target
+        
+        # Distance to actual enemy for combat logic
+        aim_dx, aim_dy = t_aim.x - self.x, t_aim.y - self.y
+        aim_dist = max(1, math.hypot(aim_dx, aim_dy))
         
         # ── STRATEGIC CONTENTION: POWER-UP FOCUS ──
-        if hasattr(self, 'battle_ref') and self.battle_ref.powerups:
+        if hasattr(self, 'battle_ref') and getattr(self.battle_ref, 'powerups', None):
             visible_pu = [pu for pu in self.battle_ref.powerups if math.hypot(pu.x-self.x, pu.y-self.y) < 450]
             if visible_pu:
-                # We see the shiny! Head towards it instead of enemy
-                t = min(visible_pu, key=lambda p: math.hypot(p.x-self.x, p.y-self.y))
+                # We see the shiny! Steer towards it instead of enemy
+                t_move = min(visible_pu, key=lambda p: math.hypot(p.x-self.x, p.y-self.y))
         
-        dx, dy = t.x - self.x, t.y - self.y
-        dist  = max(1, math.hypot(dx, dy))
+        dx, dy = t_move.x - self.x, t_move.y - self.y
+        dist  = max(1, math.hypot(dx, dy)) # Movement distance
         ndx, ndy = dx/dist, dy/dist
-        self.facing = 1 if dx > 0 else -1
+        self.facing = 1 if aim_dx > 0 else -1 # Keep facing enemy for attacks
 
-        low_hp = self.hp < self.max_hp * 0.5
+        low_hp = self.hp < self.max_hp * 0.35  # Only truly low HP triggers retreat
         has_ranged = any(ab.range > 220 for ab in self.abilities)
 
-        # ── ABILITY SELECTION ──
+        # ── ABILITY SELECTION — ALWAYS TRY TO ATTACK ──
         best_ab = None
         ready_abs = [ab for ab in self.abilities if ab.ready()]
-        
-        # Priority 1: Instant Heals
+
+        # Priority 1: Heals only when critically low
         heals = [ab for ab in ready_abs if ab.damage == 0]
-        if heals and self.hp < self.max_hp * 0.7:
+        if heals and self.hp < self.max_hp * 0.5:
             best_ab = heals[0]
 
-        # Priority 2: Ranged Strategy (Stay back if low HP)
+        # Priority 2: Use ANY ready ability in range (ranged preferred)
         if not best_ab:
-            ranged_abs = [ab for ab in ready_abs if ab.range > 220 and dist <= ab.range]
-            if ranged_abs:
-                # If low health, we ONLY want to use ranged if we have it
-                best_ab = max(ranged_abs, key=lambda a: a.damage)
-            elif not low_hp:
-                # If healthy, we can use closer moves
-                in_range = [ab for ab in ready_abs if dist <= ab.range]
-                if in_range: best_ab = max(in_range, key=lambda a: a.damage)
-            else:
-                # Low health but NO ranged ready? Maybe use a quick melee if extremely close
-                if dist < 100:
-                    melee = [ab for ab in ready_abs if dist <= ab.range]
-                    if melee: best_ab = max(melee, key=lambda a: a.damage)
+            # Expand range check: ranged can fire at full range, melee gets a 1.5x leniency buffer
+            in_range = []
+            for ab in ready_abs:
+                effective_range = ab.range if ab.range > 150 else ab.range * 2.0
+                if aim_dist <= effective_range:
+                    in_range.append(ab)
+            if in_range:
+                best_ab = max(in_range, key=lambda a: a.damage)
+
+        # Priority 3: If nothing in range but we have ready abilities, pick the highest damage anyway
+        # (the ability code will still fire particles/effects and some have no range check)
+        if not best_ab and ready_abs:
+            best_ab = max(ready_abs, key=lambda a: a.damage)
+            # Only use it if we're close enough that it makes sense (within 2x max range)
+            max_range = max(ab.range for ab in ready_abs)
+            if aim_dist > max_range * 2.5:
+                best_ab = None  # Too far away, just move closer
 
         if self.ai_timer <= 0:
-            self.ai_timer = random.uniform(0.3, 0.6)
+            self.ai_timer = random.uniform(0.15, 0.35)  # Faster decision making
             if best_ab:
-                self._use_ability(best_ab, t, projectiles)
+                self._use_ability(best_ab, t_aim, projectiles)
                 best_ab.use()
-            else:
-                # Movement strategy: "Tactical Positioning"
-                if low_hp and has_ranged:
-                    # Low HP Ranged characters should BACK AWAY
-                    self.ai_state = "strafe"
-                elif dist > 350:
+                # After using ability, always approach so the next one lands
+                if best_ab.range < 200:
                     self.ai_state = "approach"
-                elif dist < 120:
-                    self.ai_state = random.choice(["strafe", "jump_over"])
-                else:
-                    self.ai_state = random.choice(["approach", "strafe", "jump_over"])
+            else:
+                # No ability ready — aggressively close the distance
+                self.ai_state = "approach" if dist > 200 else random.choice(["approach", "strafe"])
 
-        # ── DYNAMIC DODGING / DASHING ──
-        dodge_chance = 0.08
+        # ── DYNAMIC DODGING (reduced frequency, don't interrupt attacks) ──
+        dodge_chance = 0.03  # Reduced from 0.08 so AI doesn't constantly dodge instead of attack
         if low_hp:
-            dodge_chance *= 3.0 # Significantly higher dodge chance when hurt
+            dodge_chance = 0.12
         
-        # If in jump_over or randomly dodging
-        if (self.ai_state == "jump_over" or random.random() < dodge_chance) and dist < 450:
+        # Only dodge if AI timer is not about to fire
+        if (self.ai_state == "jump_over" or random.random() < dodge_chance) and dist < 300:
             side = random.choice([1, -1])
-            # Dodge impulse
-            angle_off = random.uniform(math.pi/3, math.pi/2) * side
-            dash_vel = pygame.Vector2(ndx, ndy).rotate_rad(angle_off) * self.speed * 5.0
+            angle_off = random.uniform(math.pi/4, math.pi/3) * side
+            dash_vel = pygame.Vector2(ndx, ndy).rotate_rad(angle_off) * self.speed * 3.0
             self.body.apply_impulse_at_local_point((dash_vel.x, dash_vel.y))
-            self.particles.emit_ring(self.x, self.y, WHITE, count=15, speed=200, life=0.3)
-            self.ai_timer = 0.4 
-            if low_hp: self.ai_state = "strafe" # Run away after dodging if hurt
+            self.ai_timer = max(self.ai_timer, 0.2)  # Short pause only
+            if low_hp: self.ai_state = "strafe"
 
         # ── MOVEMENT ──
         move_vec = pygame.Vector2(0, 0)
-        if self.ai_state == "approach":
+        if self.ai_state == "scramble":
+            # Tactical retreat: move away and regroup
+            move_vec = pygame.Vector2(-ndx, -ndy).rotate_rad(random.uniform(-0.4, 0.4))
+            if random.random() < 0.05:
+                # Random tactical jump away
+                self.body.apply_impulse_at_local_point((0, -450))
+        elif self.ai_state == "approach" or not low_hp:
             move_vec = pygame.Vector2(ndx, ndy)
         elif self.ai_state == "strafe":
-            # Perpendicular movement
             move_vec = pygame.Vector2(-ndy, ndx).rotate_rad(random.uniform(-0.2, 0.2))
-            # Escape logic
-            if low_hp and has_ranged: 
-                move_vec += pygame.Vector2(-ndx, -ndy) * 0.85
+            if low_hp and has_ranged:
+                move_vec += pygame.Vector2(-ndx, -ndy) * 0.6
             else:
-                move_vec += pygame.Vector2(ndx, ndy) * (0.3 if low_hp else 0.7)
+                move_vec += pygame.Vector2(ndx, ndy) * 0.7  # Drift toward enemy while strafing
 
         # ── ANTI-CAMPING STEERING ──
-        # Don't let yourself get pinned to a wall
-        arena = self.battle_ref.arena_rect
-        if self.x < arena.left + 140: move_vec.x = max(move_vec.x, 0.6)
-        if self.x > arena.right - 140: move_vec.x = min(move_vec.x, -0.6)
-        if self.y < arena.top + 140: move_vec.y = max(move_vec.y, 0.6)
-        if self.y > arena.bottom - 140: move_vec.y = min(move_vec.y, -0.6)
+        # Dynamically push away from ALL walls, pillars, and corners
+        if hasattr(self, 'battle_ref') and getattr(self.battle_ref, 'walls', None):
+            repel_vec = pygame.Vector2(0, 0)
+            for w in self.battle_ref.walls:
+                if hasattr(w, 'a') and hasattr(w, 'b'): # pymunk.Segment
+                    p1 = pygame.Vector2(w.a.x, w.a.y)
+                    p2 = pygame.Vector2(w.b.x, w.b.y)
+                    line_vec = p2 - p1
+                    pt_vec = pygame.Vector2(self.x, self.y) - p1
+                    line_len = line_vec.length()
+                    if line_len > 0:
+                        proj = pt_vec.dot(line_vec) / line_len
+                        proj = max(0, min(line_len, proj))
+                        closest_pt = p1 + (line_vec / line_len) * proj
+                        dist_to_wall = math.hypot(self.x - closest_pt.x, self.y - closest_pt.y)
+                        avoid_dist = 180 # Stay well away from edges
+                        if dist_to_wall < avoid_dist:
+                            push_dir = pygame.Vector2(self.x - closest_pt.x, self.y - closest_pt.y)
+                            if push_dir.length() > 0:
+                                repel_vec += push_dir.normalize() * ((avoid_dist - dist_to_wall) / avoid_dist)
+                
+                elif hasattr(w, 'radius'): # pymunk.Circle (Pillars)
+                    px = w.body.position.x + getattr(w, 'offset', pygame.Vector2(0,0)).x
+                    py = w.body.position.y + getattr(w, 'offset', pygame.Vector2(0,0)).y
+                    dist_to_pillar = math.hypot(self.x - px, self.y - py)
+                    avoid_dist = w.radius + 140
+                    if dist_to_pillar < avoid_dist:
+                        push_dir = pygame.Vector2(self.x - px, self.y - py)
+                        if push_dir.length() > 0:
+                            repel_vec += push_dir.normalize() * ((avoid_dist - dist_to_pillar) / avoid_dist) * 1.5
+                            
+            if repel_vec.length() > 0:
+                # Add strong repulsive force to the movement vector
+                move_vec += repel_vec * 1.5
 
         if move_vec.length() > 0:
             move_vec = move_vec.normalize() * self.speed
-            self.body.velocity += (move_vec - self.body.velocity) * 0.25
+            self.body.velocity += (move_vec - self.body.velocity) * 0.30  # Slightly snappier
 
-        # Final safety: don't get stuck far away unless kiting
-        if dist > 900 and not (low_hp and has_ranged):
+        # Always re-approach if drifted too far from target
+        if dist > 600 and not (low_hp and has_ranged):
             self.ai_state = "approach"
 
 
@@ -1478,6 +1897,13 @@ class Fighter:
         dy = target.y - self.y
         dist = max(1, math.hypot(dx, dy))
         ndx, ndy = dx/dist, dy/dist
+
+        # ── DASH FORWARD (Attack Lunge) ──
+        if ab.range < 170: # Melee lunge
+            self.body.velocity = (ndx * 750, ndy * 300)
+            self.particles.emit_slash(self.x, self.y, math.atan2(ndy, ndx), ab.color, size=int(self.size)+10)
+        elif ab.range > 300: # Muzzle flash for ranged
+            self.particles.emit(self.x + ndx*20, self.y + ndy*20, ab.color, count=8, speed=200, spread=0.5, direction=math.atan2(ndy, ndx))
 
         name = ab.name
 
@@ -1617,6 +2043,7 @@ class Fighter:
 
         # ── DEMON ──
         elif name == "Dark Claw":
+            self.particles.emit_beam(self.x, self.y, self.x+ndx*ab.range, self.y+ndy*ab.range, CRIMSON, count=20, size=6)
             for i in range(5):
                 off = (i-2)*10
                 self.particles.emit(self.x + ndx*50 + (-ndy*off), self.y + ndy*50 + (ndx*off), CRIMSON, count=5, speed=150)
@@ -1626,25 +2053,41 @@ class Fighter:
 
         elif name == "Hell Spike":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
-            p = Projectile(self.x, self.y, ndx*380, ndy*380,
-                          ab.damage, (150,0,50), 9, self.team,
-                          CRIMSON, homing=True)
-            projectiles.append(p)
+            # Throws stationary spikes onto the stage that hurt enemies when they step on them
+            for _ in range(5):
+                dist_throw = random.uniform(40, ab.range)
+                angle = math.atan2(ndy, ndx) + random.uniform(-0.7, 0.7)
+                px = self.x + math.cos(angle) * dist_throw
+                py = self.y + math.sin(angle) * dist_throw
+                p = Projectile(px, py, 0, 0,
+                              ab.damage // 2, (150,0,50), 10, self.team,
+                              CRIMSON, homing=False)
+                projectiles.append(p)
+                # Visual appearance effect
+                self.particles.emit(px, py, CRIMSON, count=15, speed=80, size=5, gravity=False)
+                self.particles.emit_ring(px, py, (100, 0, 30), count=8, speed=30, size=6)
 
         elif name == "Soul Drain":
             self.particles.emit_beam(self.x, self.y, target.x, target.y,
                                     PURPLE, count=20, life=0.5)
+            # Make the character glow while draining life
+            self.particles.emit_ring(self.x, self.y, PURPLE, count=20, speed=40, size=7, life=0.6)
+            self.particles.emit(self.x, self.y, PINK, count=10, speed=15, size=8, life=0.5, gravity=False)
             if dist < ab.range:
                 stolen = target.take_damage(ab.damage, attacker=self)
                 self.heal(stolen * 0.8)
+                target.particles.emit_ring(target.x, target.y, PURPLE, count=10, speed=60, size=4)
 
         elif name == "Hellfire":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             for _ in range(6):
                 px = target.x + random.uniform(-120, 120)
                 p = Projectile(px, -30, 0, 500, ab.damage//6,
                               RED, 10, self.team, ORANGE)
                 p.gravity_affected = False
                 projectiles.append(p)
+                # Show landing indicator
+                self.particles.emit_ring(px, target.y + random.uniform(-20, 20), ORANGE, count=15, speed=40, size=5)
 
         # ── ROBOT ──
         elif name == "Laser Beam":
@@ -2565,6 +3008,595 @@ class Fighter:
             target.take_damage(ab.damage, attacker=self)
             target.stun_timer = 2.0
 
+        # ── PHANTOM ──
+        elif name == "Phase Blink":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit(self.x, self.y, PURPLE, count=20, speed=200, life=0.4, gravity=False)
+            self.body.position = (target.x - self.facing*50, target.y + random.uniform(-30,30))
+            self.particles.emit(self.x, self.y, (180,100,255), count=20, speed=150, gravity=False)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*300, attacker=self)
+
+        elif name == "Ghost Strike":
+            self.invincible_timer = 0.5  # Brief phase
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, PURPLE, count=20)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*400, attacker=self)
+
+        elif name == "Void Step":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for _ in range(3):
+                fx = target.x + random.uniform(-120, 120)
+                fy = target.y + random.uniform(-60, 60)
+                self.particles.emit_ring(fx, fy, (180,100,255), count=15, speed=120, size=5)
+            self.body.position = (target.x + self.facing*40, target.y)
+            target.take_damage(ab.damage, ndx*300, attacker=self)
+            target.stun_timer = 0.8
+
+        elif name == "Phantom Surge":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for i in range(6):
+                px = target.x + random.uniform(-150, 150)
+                py = target.y + random.uniform(-80, 80)
+                self.particles.emit_ring(px, py, (180,100,255), count=20, speed=200, size=8)
+                self.particles.emit(px, py, WHITE, count=10, speed=100)
+            target.take_damage(ab.damage, ndx*600, -400, attacker=self)
+
+        # ── TIME-LORD ──
+        elif name == "Time Bolt":
+            p = Projectile(self.x, self.y, ndx*500, ndy*500, ab.damage, GOLD, 8, self.team, YELLOW)
+            projectiles.append(p)
+
+        elif name == "Slow Field":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(target.x, target.y, YELLOW, count=30, speed=80, size=6, life=1.5)
+            if dist < ab.range:
+                target.take_damage(ab.damage, attacker=self)
+                target.stun_timer = 2.0  # "Slow" = stun
+                target.body.velocity = (target.body.velocity.x * 0.2, target.body.velocity.y * 0.2)
+
+        elif name == "Rewind":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('heal')
+            heal_amt = self.max_hp * 0.35  # Rewind ~35% HP
+            self.heal(heal_amt)
+            self.particles.emit_ring(self.x, self.y, CYAN, count=40, speed=200, size=8)
+            for _ in range(3):
+                self.particles.emit_ring(self.x, self.y, GOLD, count=20, speed=100+_*80, size=6)
+
+        elif name == "Timestop":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(target.x, target.y, WHITE, count=50, speed=400, size=10)
+            target.stun_timer = 2.5
+            target.take_damage(ab.damage, ndx*200, attacker=self)
+            if hasattr(self, 'battle_ref'): self.battle_ref.impact_flash = 0.1
+
+        # ── NECROMANCER ──
+        elif name == "Cursed Bolt":
+            p = Projectile(self.x, self.y, ndx*450, ndy*450, ab.damage, (80,200,80), 7, self.team, LIME, piercing=True)
+            projectiles.append(p)
+
+        elif name == "Death Touch":
+            self.particles.emit(target.x, target.y, (50,150,50), count=20, speed=200)
+            if dist < ab.range:
+                target.take_damage(ab.damage, attacker=self)
+                target.apply_dot(15, 4.0)
+
+        elif name == "Plague Cloud":
+            for _ in range(20):
+                self.particles.emit(target.x + random.uniform(-80,80), target.y + random.uniform(-40,40),
+                                   LIME, count=2, speed=30, size=10, life=2.0, gravity=False)
+            if dist < ab.range:
+                target.take_damage(ab.damage, attacker=self)
+                target.apply_dot(20, 5.0)
+
+        elif name == "Army of Dead":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for _ in range(12):
+                angle = random.uniform(0, math.pi*2)
+                p = Projectile(self.x, self.y, math.cos(angle)*400, math.sin(angle)*400,
+                              ab.damage//12, (80,200,80), 8, self.team, LIME, aoe_radius=25)
+                projectiles.append(p)
+
+        # ── MIRROR-MAGE ──
+        elif name == "Mirror Shard":
+            p = Projectile(self.x, self.y, ndx*500, ndy*500, ab.damage, (200,220,255), 7, self.team, WHITE, piercing=True)
+            projectiles.append(p)
+
+        elif name == "Reflect":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.invincible_timer = 2.0
+            self.particles.emit_ring(self.x, self.y, WHITE, count=30, speed=150, size=8)
+            # Mirror the enemy's velocity back
+            if dist < ab.range:
+                rx, ry = -target.body.velocity.x, -target.body.velocity.y
+                target.body.velocity = (rx, ry)
+                target.take_damage(ab.damage, rx*0.3, ry*0.3, attacker=self)
+
+        elif name == "Clone Army":
+            for i in range(3):
+                off = [(100, -80), (-100, -80), (0, -130)][i]
+                self.particles.emit_ring(self.x + off[0], self.y + off[1],
+                                        SILVER, count=20, speed=100, size=6)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*200, attacker=self)
+            target.stun_timer = 1.0
+
+        elif name == "Prism Burst":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for i in range(12):
+                angle = i * (math.pi*2/12)
+                p = Projectile(self.x, self.y, math.cos(angle)*500, math.sin(angle)*500,
+                              ab.damage//12, (200,220,255), 6, self.team, WHITE, piercing=True)
+                projectiles.append(p)
+
+        # ── BLACK-HOLE ──
+        elif name == "Gravity Pull":
+            if dist < ab.range:
+                pull_x = (self.x - target.x)
+                pull_y = (self.y - target.y)
+                target.body.velocity = (target.body.velocity.x + pull_x*3, target.body.velocity.y + pull_y*3)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, PURPLE, count=15)
+                target.take_damage(ab.damage, attacker=self)
+
+        elif name == "Event Horizon":
+            self.particles.emit_ring(self.x, self.y, PURPLE, count=40, speed=60, size=10, life=1.0)
+            if dist < ab.range:
+                pull_x = self.x - target.x; pull_y = self.y - target.y
+                target.body.velocity = (pull_x*2, pull_y*2)
+                target.take_damage(ab.damage, attacker=self)
+
+        elif name == "Dark Matter":
+            p = Projectile(self.x, self.y, ndx*350, ndy*350, ab.damage, (50,0,80), 18, self.team, PURPLE, aoe_radius=100)
+            projectiles.append(p)
+
+        elif name == "Singularity":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, BLACK, count=60, speed=600, size=15)
+            self.particles.emit_ring(self.x, self.y, PURPLE, count=40, speed=300, size=10)
+            for _ in range(3):
+                target.take_damage(ab.damage//3, (self.x-target.x)*2, (self.y-target.y)*2, attacker=self)
+
+        # ── ALCHEMIST ──
+        elif name == "Acid Flask":
+            p = Projectile(self.x, self.y, ndx*450, ndy*450-100, ab.damage, (150,200,50), 9, self.team, LIME)
+            projectiles.append(p)
+            if dist < ab.range: target.apply_dot(15, 3.0)
+
+        elif name == "Fire Potion":
+            p = Projectile(self.x, self.y, ndx*400, ndy*400-150, ab.damage, ORANGE, 10, self.team, RED, aoe_radius=60)
+            projectiles.append(p)
+
+        elif name == "Transmute":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(target.x, target.y, GOLD, count=25, speed=200, size=8)
+            if dist < ab.range:
+                target.take_damage(ab.damage, attacker=self)
+                target.damage_mult = max(0.3, target.damage_mult - 0.5)
+                target.stun_timer = 1.0
+
+        elif name == "Grand Elixir":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for _ in range(5):
+                p = Projectile(self.x+random.uniform(-30,30), self.y,
+                              ndx*400+random.uniform(-100,100), ndy*400-random.uniform(0,200),
+                              ab.damage//5, PURPLE, 10, self.team, ORANGE, aoe_radius=50)
+                projectiles.append(p)
+
+        # ── MAGNETAR ──
+        elif name == "Magnetic Pull":
+            if dist < ab.range:
+                pull_x = (self.x - target.x) * 3
+                pull_y = (self.y - target.y) * 3
+                target.body.velocity = (pull_x, pull_y)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, BLUE, count=20, size=6)
+                target.take_damage(ab.damage, attacker=self)
+
+        elif name == "Repulse Blast":
+            self.particles.emit_ring(self.x, self.y, CYAN, count=20, speed=200, size=8)
+            if dist < ab.range:
+                target.body.velocity = (ndx*1200, ndy*1200)
+                target.take_damage(ab.damage, ndx*800, ndy*800, attacker=self)
+
+        elif name == "Iron Storm":
+            for _ in range(8):
+                angle = math.atan2(ndy,ndx) + random.uniform(-0.4,0.4)
+                p = Projectile(self.x, self.y, math.cos(angle)*500, math.sin(angle)*500,
+                              ab.damage//8, SILVER, 6, self.team, BLUE)
+                projectiles.append(p)
+
+        elif name == "Polarity Flip":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, WHITE, count=50, speed=500, size=12)
+            if dist < ab.range:
+                target.body.velocity = (-target.body.velocity.x*2, -target.body.velocity.y*2)
+                target.take_damage(ab.damage, -ndx*800, -ndy*600, attacker=self)
+
+        # ── TSUNAMI ──
+        elif name == "Water Jet":
+            p = Projectile(self.x, self.y, ndx*700, ndy*700, ab.damage, BLUE, 8, self.team, CYAN)
+            projectiles.append(p)
+
+        elif name == "Riptide":
+            self.particles.emit(self.x + ndx*100, self.y, CYAN, count=25, speed=300, direction=math.atan2(ndy,ndx))
+            if dist < ab.range: target.take_damage(ab.damage, ndx*600, -200, attacker=self)
+
+        elif name == "Wave Crash":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for i in range(5):
+                self.particles.emit(self.x + ndx*i*60, self.y, BLUE, count=8, speed=150, size=12)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*700, -300, attacker=self)
+
+        elif name == "Mega Tsunami":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, BLUE, count=60, speed=600, size=15)
+            for _ in range(8):
+                angle = math.atan2(ndy,ndx) + random.uniform(-0.3,0.3)
+                p = Projectile(self.x, self.y, math.cos(angle)*600, math.sin(angle)*600,
+                              ab.damage//8, BLUE, 12, self.team, CYAN, aoe_radius=40)
+                projectiles.append(p)
+
+        # ── BOUNTY-HUNTER ──
+        elif name == "Stun Dart":
+            p = Projectile(self.x, self.y, ndx*750, ndy*750, ab.damage, BROWN, 5, self.team, GOLD)
+            projectiles.append(p)
+            if dist < ab.range: target.stun_timer = 0.8
+
+        elif name == "Trip Mine":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            # Plant mine near enemy
+            mx = target.x + random.uniform(-60,60)
+            my = target.y + random.uniform(-60,60)
+            p = Projectile(mx, my, 0, 0, ab.damage, ORANGE, 12, self.team, RED, aoe_radius=80)
+            projectiles.append(p)
+            self.particles.emit_ring(mx, my, ORANGE, count=15, speed=50, size=6)
+
+        elif name == "Headshot":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, SILVER, count=15, size=4, life=0.2)
+            target.take_damage(ab.damage, ndx*400, attacker=self)
+            target.stun_timer = 1.0
+
+        elif name == "Obliterate":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for i in range(10):
+                p = Projectile(self.x, self.y, ndx*700+random.uniform(-80,80), ndy*700+random.uniform(-80,80)-i*30,
+                              ab.damage//10, RED, 6, self.team, ORANGE, homing=True)
+                projectiles.append(p)
+
+        # ── CRYSTAL-WITCH ──
+        elif name == "Crystal Bolt":
+            p = Projectile(self.x, self.y, ndx*500, ndy*500, ab.damage, (180,80,220), 7, self.team, PINK, piercing=True)
+            projectiles.append(p)
+
+        elif name == "Hex Curse":
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, PINK, count=20, size=4)
+            if dist < ab.range:
+                target.take_damage(ab.damage, attacker=self)
+                target.dodge_rate = max(0, target.dodge_rate - 0.2)
+                target.stun_timer = 0.6
+
+        elif name == "Crystal Cage":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_trap(target.x, target.y, (180,80,220), size=80, count=20)
+            if dist < ab.range:
+                target.take_damage(ab.damage, attacker=self)
+                target.stun_timer = 2.5
+
+        elif name == "Dark Ritual":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.take_damage(self.max_hp * 0.15)  # Self-sacrifice
+            self.particles.emit_ring(self.x, self.y, (100,0,150), count=50, speed=400, size=12)
+            target.take_damage(ab.damage, ndx*500, -400, attacker=self)
+            target.apply_dot(25, 5.0)
+
+        # ── LAVA-TITAN ──
+        elif name == "Lava Fist":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('thud')
+            self.particles.emit(self.x + ndx*60, self.y, ORANGE, count=15, speed=200, size=8)
+            if dist < ab.range:
+                target.take_damage(ab.damage, ndx*400, attacker=self)
+                target.apply_dot(10, 2.0)
+
+        elif name == "Magma Hurl":
+            p = Projectile(self.x, self.y, ndx*400, ndy*400-150, ab.damage, RED, 14, self.team, ORANGE, aoe_radius=70)
+            projectiles.append(p)
+
+        elif name == "Eruption":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, GOLD, count=30, speed=300, size=12)
+            for _ in range(6):
+                px = self.x + random.uniform(-120,120)
+                p = Projectile(px, -30, 0, 600, ab.damage//6, ORANGE, 10, self.team, RED)
+                p.gravity_affected = False
+                projectiles.append(p)
+
+        elif name == "Caldera":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for _ in range(15):
+                px = target.x + random.uniform(-200,200)
+                p = Projectile(px, -50, 0, 700, ab.damage//15, (220,80,20), 12, self.team, ORANGE, aoe_radius=50)
+                p.gravity_affected = False
+                projectiles.append(p)
+
+        # ── PSIONIC ──
+        elif name == "Mind Bolt":
+            p = Projectile(self.x, self.y, ndx*550, ndy*550, ab.damage, PINK, 7, self.team, (180,100,220))
+            projectiles.append(p)
+
+        elif name == "Telekinesis":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, (180,100,220), count=20, size=5)
+            if dist < ab.range:
+                r = self.battle_ref.arena_rect if hasattr(self,'battle_ref') else None
+                if r:
+                    # Fling toward opposite wall
+                    cx, cy = r.centerx, r.centery
+                    fling_x = (target.x - cx) * 8
+                    fling_y = (target.y - cy) * 8
+                    target.body.velocity = (fling_x, fling_y)
+                target.take_damage(ab.damage, ndx*200, attacker=self)
+
+        elif name == "Mind Crush":
+            self.particles.emit_ring(target.x, target.y, PURPLE, count=30, speed=200, size=8)
+            if dist < ab.range:
+                target.take_damage(ab.damage, 0, -300, attacker=self)
+                target.stun_timer = 1.5
+
+        elif name == "Psionic Storm":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for _ in range(10):
+                angle = random.uniform(0, math.pi*2)
+                p = Projectile(target.x, target.y, math.cos(angle)*400, math.sin(angle)*400,
+                              ab.damage//10, (180,100,220), 7, self.team, PINK, homing=True)
+                projectiles.append(p)
+
+        # ── WEREWOLF ──
+        elif name == "Rend":
+            for i in range(3):
+                off = (i-1)*12
+                self.particles.emit(self.x+ndx*50+(-ndy*off), self.y+ndy*50+(ndx*off), BROWN, count=4, speed=150)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*200, attacker=self)
+
+        elif name == "Pounce":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('thud')
+            self.body.velocity = (ndx*900, -500)
+            self.particles.emit(self.x, self.y, (140,110,80), count=15, speed=200)
+            if dist < 150: target.take_damage(ab.damage, ndx*500, attacker=self)
+
+        elif name == "Howl":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, WHITE, count=35, speed=250, size=8)
+            if dist < ab.range:
+                target.take_damage(ab.damage, ndx*300, attacker=self)
+                target.stun_timer = 1.2
+                self.speed = min(self.speed * 1.2, 600)  # Howl buffs own speed
+
+        elif name == "Full Moon Rage":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, SILVER, count=50, speed=400, size=10)
+            for _ in range(5):
+                target.take_damage(ab.damage//5, ndx*200, attacker=self)
+                self.particles.emit(target.x, target.y, BROWN, count=8, speed=200)
+
+        # ── STORMBORN ──
+        elif name == "Spark Shot":
+            p = Projectile(self.x, self.y, ndx*700, ndy*700, ab.damage, YELLOW, 6, self.team, CYAN)
+            projectiles.append(p)
+
+        elif name == "Thunder Dash":
+            self.body.velocity = (ndx*1100, ndy*400)
+            self.particles.emit(self.x, self.y, YELLOW, count=15, speed=200)
+            if dist < 150: target.take_damage(ab.damage, ndx*600, attacker=self)
+
+        elif name == "Ball Lightning":
+            p = Projectile(self.x, self.y, ndx*300, ndy*300, ab.damage, WHITE, 12, self.team, YELLOW, piercing=True, aoe_radius=50)
+            projectiles.append(p)
+
+        elif name == "Supercell":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for _ in range(8):
+                px = target.x + random.uniform(-150,150)
+                self.particles.emit_beam(px, -200, px, target.y, (100,180,255), count=8, size=6)
+            target.take_damage(ab.damage, 0, 300, attacker=self)
+            target.stun_timer = 1.0
+
+        # ── SAMURAI ──
+        elif name == "Iai Strike":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('slash')
+            self.particles.emit_beam(self.x, self.y, self.x+ndx*ab.range, self.y+ndy*ab.range, SILVER, count=15, size=5, life=0.15)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*300, attacker=self)
+
+        elif name == "Parry":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('slash')
+            self.invincible_timer = 0.8
+            self.particles.emit_ring(self.x, self.y, GOLD, count=20, speed=100, size=6)
+            if dist < ab.range:
+                target.take_damage(ab.damage, -ndx*400, attacker=self)  # Counter-strike
+
+        elif name == "Blade Storm":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('slash')
+            for i in range(8):
+                angle = i * (math.pi*2/8)
+                self.particles.emit(self.x + math.cos(angle)*60, self.y + math.sin(angle)*60,
+                                   (220,180,100), count=5, speed=150, size=6)
+            if dist < ab.range:
+                target.take_damage(ab.damage, ndx*400, -300, attacker=self)
+
+        elif name == "Seppuku Edge":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.take_damage(self.max_hp * 0.1)  # Honor sacrifice
+            self.particles.emit_ring(self.x, self.y, CRIMSON, count=40, speed=300, size=10)
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, SILVER, count=30, size=8)
+            target.take_damage(ab.damage, ndx*800, -500, attacker=self)
+
+        # ── GUNSMITH ──
+        elif name == "Quick Draw":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self.particles.emit_beam(self.x, self.y, self.x+ndx*300, self.y+ndy*300, GOLD, count=8, size=3, life=0.08)
+            p = Projectile(self.x, self.y, ndx*900, ndy*900, ab.damage, (180,130,60), 5, self.team, GOLD)
+            projectiles.append(p)
+
+        elif name == "Deploy Turret":
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.sounds.play('shoot')
+                # Plant a stationary turret projectile that fires for 3 seconds (simulated via rapid burst)
+                tx = self.x + ndx*80
+                ty = self.y + ndy*80
+                self.particles.emit_ring(tx, ty, SILVER, count=20, speed=60, size=6)
+                self.particles.emit(tx, ty, (180,130,60), count=15, speed=30, size=8, gravity=False)
+                # Turret fires a burst of bullets in enemy direction
+                for i in range(8):
+                    spread = random.uniform(-0.15, 0.15)
+                    angle = math.atan2(ndy, ndx) + spread
+                    p = Projectile(tx, ty, math.cos(angle)*750, math.sin(angle)*750,
+                                  ab.damage//8, SILVER, 5, self.team, GOLD)
+                    projectiles.append(p)
+
+        elif name == "Shotgun Blast":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self.particles.emit_ring(self.x + ndx*30, self.y + ndy*30, ORANGE, count=20, speed=250, size=5)
+            for i in range(7):
+                spread = (i - 3) * 0.15
+                angle = math.atan2(ndy, ndx) + spread
+                p = Projectile(self.x, self.y, math.cos(angle)*600, math.sin(angle)*600,
+                              ab.damage//7, ORANGE, 6, self.team, GOLD)
+                projectiles.append(p)
+
+        elif name == "Gatling Storm":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            for i in range(20):
+                spread = random.uniform(-0.25, 0.25)
+                angle = math.atan2(ndy, ndx) + spread
+                px = self.x + random.uniform(-20, 20)
+                py = self.y + random.uniform(-20, 20)
+                p = Projectile(px, py, math.cos(angle)*800, math.sin(angle)*800,
+                              ab.damage//20, RED, 5, self.team, ORANGE)
+                projectiles.append(p)
+            self.particles.emit_ring(self.x, self.y, ORANGE, count=30, speed=150, size=5)
+
+        # ── ARCHITECT ──
+        elif name == "Stone Throw":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('thud')
+            p = Projectile(self.x, self.y, ndx*500, ndy*500-80, ab.damage, (120,100,80), 12, self.team, BROWN)
+            projectiles.append(p)
+
+        elif name == "Build Wall":
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.sounds.play('thud')
+                br = self.battle_ref
+                # Place a wall segment between self and enemy
+                wx = (self.x + target.x) / 2
+                wy = (self.y + target.y) / 2
+                # Wall perpendicular to the line between fighters
+                perp_x, perp_y = -ndy, ndx
+                w_len = 70
+                static = br.space.static_body
+                wall = pymunk.Segment(static,
+                    (wx - perp_x*w_len, wy - perp_y*w_len),
+                    (wx + perp_x*w_len, wy + perp_y*w_len), 8)
+                wall.elasticity = 0.6; wall.friction = 0.5
+                wall.collision_type = 0
+                br.space.add(wall)
+                if not hasattr(br, 'temp_walls'): br.temp_walls = []
+                br.temp_walls.append((wall, 8.0))  # (wall, lifetime seconds)
+                # Visual effect
+                for i in range(5):
+                    self.particles.emit(wx + perp_x*i*25, wy + perp_y*i*25,
+                                       (120,100,80), count=8, speed=60, size=8, gravity=False)
+                    self.particles.emit(wx - perp_x*i*25, wy - perp_y*i*25,
+                                       (120,100,80), count=8, speed=60, size=8, gravity=False)
+                if dist < ab.range: target.take_damage(ab.damage, ndx*100, attacker=self)
+
+        elif name == "Fortify":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.invincible_timer = 4.0
+            self.particles.emit_ring(self.x, self.y, BLUE, count=30, speed=80, size=10)
+            self.particles.emit_ring(self.x, self.y, SILVER, count=20, speed=40, size=14)
+            self.trait_label_txt = "FORTIFIED!"
+            self.trait_label_timer = 2.0
+
+        elif name == "Wall Collapse":
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.sounds.play('special')
+                br = self.battle_ref
+                # Destroy all temp walls and deal damage for each
+                if hasattr(br, 'temp_walls') and br.temp_walls:
+                    for w, _ in br.temp_walls:
+                        if w in br.space.shapes: br.space.remove(w)
+                        # Slam wall into enemy as shrapnel
+                        self.particles.emit_ring(target.x, target.y, BROWN, count=25, speed=300, size=8)
+                    num_walls = len(br.temp_walls)
+                    br.temp_walls = []
+                    target.take_damage(ab.damage + num_walls*15, ndx*500, attacker=self)
+                else:
+                    # Even without walls do the base damage
+                    self.particles.emit_ring(self.x, self.y, BROWN, count=30, speed=300, size=8)
+                    target.take_damage(ab.damage, ndx*400, attacker=self)
+
+        # ── CLONE-MASTER ──
+        elif name == "Shadow Punch":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('thud')
+            self.particles.emit(self.x + ndx*50, self.y + ndy*50, TEAL, count=15, speed=200)
+            if dist < ab.range: target.take_damage(ab.damage, ndx*350, attacker=self)
+
+        elif name == "Spawn Clone":
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.sounds.play('special')
+                br = self.battle_ref
+                # Create a clone projectile swarm that behaves like a fighter
+                # We simulate a clone with a fast burst of homing projectiles
+                cx = self.x + random.uniform(-80, 80)
+                cy = self.y + random.uniform(-40, 40)
+                self.particles.emit_ring(cx, cy, TEAL, count=25, speed=100, size=7)
+                self.particles.emit_ring(cx, cy, CYAN, count=15, speed=40, size=10)
+                # Clone fires a burst at the target
+                for _ in range(4):
+                    spread = random.uniform(-0.2, 0.2)
+                    angle = math.atan2(target.y-cy, target.x-cx) + spread
+                    p = Projectile(cx, cy, math.cos(angle)*450, math.sin(angle)*450,
+                                  ab.damage//4, (80,220,200), 7, self.team, TEAL, homing=True)
+                    br.projectiles.append(p)
+
+        elif name == "Twin Strike":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('slash')
+            # Self strikes
+            if dist < ab.range:
+                target.take_damage(ab.damage//2, ndx*300, attacker=self)
+            # Clone ghost strikes from a flanking angle
+            clone_x = self.x - ndy*80
+            clone_y = self.y + ndx*80
+            self.particles.emit(clone_x, clone_y, TEAL, count=20, speed=150, size=6)
+            self.particles.emit_beam(clone_x, clone_y, target.x, target.y, CYAN, count=10, size=4, life=0.2)
+            target.take_damage(ab.damage//2, -ndy*300, attacker=self)
+
+        elif name == "Clone Army":
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.sounds.play('special')
+                br = self.battle_ref
+                self.particles.emit_ring(self.x, self.y, TEAL, count=60, speed=300, size=8)
+                # Spawn 4 clones at different positions, all attacking
+                offsets = [(-120,-60),(120,-60),(-60,80),(60,80)]
+                for off in offsets:
+                    cx = self.x + off[0]; cy = self.y + off[1]
+                    self.particles.emit_ring(cx, cy, CYAN, count=20, speed=80, size=6)
+                    # Each clone fires homing burst
+                    angle = math.atan2(target.y-cy, target.x-cx)
+                    for _ in range(3):
+                        spread = random.uniform(-0.2, 0.2)
+                        p = Projectile(cx, cy,
+                                      math.cos(angle+spread)*500,
+                                      math.sin(angle+spread)*500,
+                                      ab.damage//12, TEAL, 7, self.team, CYAN, homing=True)
+                        br.projectiles.append(p)
+
+        # ── RECOIL / BACK-DASH (Tactical Retreat) ──
+        # Move back after hit / ability use
+        recoil_force = 450 if ab.range < 170 else 180
+        self.body.velocity = (
+            self.body.velocity.x - ndx * recoil_force,
+            self.body.velocity.y - ndy * recoil_force
+        )
+        # Visual dash trail for retreat
+        self.particles.emit(self.x, self.y, WHITE, count=5, speed=60, size=3, life=0.5, gravity=False)
+        self.particles.emit_ring(self.x, self.y, ab.color, count=10, speed=40, size=2)
+
 
 
 
@@ -2578,20 +3610,32 @@ class Fighter:
         draw_color = WHITE if self.hit_flash > 0 else self.color
         body_draw  = WHITE if self.hit_flash > 0 else self.body_color
 
+        # ── ANIMATIC EFFECTS ──
+        # Squash & Stretch based on velocity
+        v_mag = math.hypot(self.vx, self.vy)
+        stretch = min(1.35, 1.0 + v_mag / 1400.0)
+        squash = 1.0 / stretch
+        
+        # Hit Shake
+        hx, hy = 0, 0
+        if self.hit_flash > 0:
+            hx, hy = random.randint(-4, 4), random.randint(-4, 4)
+
         # Shadow
         shadow_surf = pygame.Surface((s*4, s*4), pygame.SRCALPHA)
-        pygame.draw.circle(shadow_surf, (0,0,0,40), (s*2, s*2), s+2)
-        screen.blit(shadow_surf, (x - s*2, y - s*2 + 4))
+        pygame.draw.ellipse(shadow_surf, (0,0,0,40), (s*2 - int(s*stretch), s*2 - int(s*squash) + 4, int(s*2*stretch), int(s*2*squash)))
+        screen.blit(shadow_surf, (x - s*2 + hx, y - s*2 + hy))
 
         # Body (main circle)
-        pygame.draw.circle(screen, body_draw, (x, y), s)
-        pygame.draw.circle(screen, draw_color, (x, y), s, 2)
+        rect = (x - int(s*stretch) + hx, y - int(s*squash) + hy, int(s*2*stretch), int(s*2*squash))
+        pygame.draw.ellipse(screen, body_draw, rect)
+        pygame.draw.ellipse(screen, draw_color, rect, 2)
 
         # Eyes
-        eye_x = x + self.facing * (s//3)
-        eye_y = y - s//4
-        pygame.draw.circle(screen, WHITE, (eye_x, eye_y), s//5)
-        pygame.draw.circle(screen, BLACK, (eye_x + self.facing*1, eye_y), s//8)
+        eye_x = x + self.facing * (s*0.4) + hx
+        eye_y = y - s*0.2 + hy
+        pygame.draw.circle(screen, WHITE, (int(eye_x), int(eye_y)), s//5)
+        pygame.draw.circle(screen, BLACK, (int(eye_x + self.facing*1), int(eye_y)), s//8)
 
         # ── DRAW WEAPON ──
         w_color = (180, 180, 180) # Default steel
@@ -2744,6 +3788,10 @@ class Battle:
         self.orig_arena_size = 600
         self.powerups: List[PowerUp] = []
         self.pu_spawn_timer = 10.0 # First one at 10s
+        self.TIME_LIMIT = 105.0  # 1 minute 45 seconds
+        self.time_up = False     # True when battle ended by timer
+        self.time_up_winner_team = -1
+        self.time_up_judgment = []  # List of strings explaining the judgment
 
         # ── ARENA GENERATION ──
         self.arena_size = 600
@@ -2823,12 +3871,26 @@ class Battle:
         # Use on_collision for Pymunk 7.x
         self.space.on_collision(0, 99, begin=hazard_begin)
 
-        # Fighter-to-Fighter collision sound
+        # Fighter-to-Fighter collision (Push/Bump logic)
         def fighter_collide(arbiter, space, data):
+            s1, s2 = arbiter.shapes
+            f1 = getattr(s1, 'fighter', None)
+            f2 = getattr(s2, 'fighter', None)
+            if f1 and f2:
+                # Add a tactical 'bounce' between fighters
+                dx, dy = f1.x - f2.x, f1.y - f2.y
+                dist = math.hypot(dx, dy) or 1
+                ndx, ndy = dx/dist, dy/dist
+                # Bump force proportional to impact but with a base minimum
+                force = 180 + min(arbiter.total_impulse.length * 0.1, 400)
+                f1.body.velocity = (f1.body.velocity.x + ndx*force, f1.body.velocity.y + ndy*force*0.5)
+                f2.body.velocity = (f2.body.velocity.x - ndx*force, f2.body.velocity.y - ndy*force*0.5)
+                # Visual sparks on impact
+                f1.particles.emit(f1.x, f1.y, WHITE, count=4, speed=60)
             if arbiter.total_impulse.length > 500:
                 self.sounds.play('thud')
             return True
-        self.space.on_collision(0, 0, post_solve=fighter_collide)
+        self.space.on_collision(1, 1, post_solve=fighter_collide) # Use Fighter collision type (1)
         
         self.projectiles: List[Projectile] = []
         self.fighters: List[Fighter] = []
@@ -2921,7 +3983,28 @@ class Battle:
             return
 
         self.elapsed += dt
-        
+
+        # ── ARCHITECT TEMP WALL LIFETIME ──
+        if hasattr(self, 'temp_walls') and self.temp_walls:
+            surviving = []
+            for w, lifetime in self.temp_walls:
+                remaining = lifetime - dt
+                if remaining <= 0:
+                    if w in self.space.shapes:
+                        self.space.remove(w)
+                    mx = (w.a.x + w.b.x) / 2
+                    my = (w.a.y + w.b.y) / 2
+                    self.particles.emit(mx, my, (120, 100, 80), count=12, speed=80, size=6)
+                else:
+                    surviving.append((w, remaining))
+            self.temp_walls = surviving
+
+        # ── CLONE MASTER ACTIVE CLONE CLEANUP ──
+        if hasattr(self, 'active_clones'):
+            t_now = pygame.time.get_ticks() / 1000.0
+            self.active_clones = [(cx, cy, col, born, lt) for cx, cy, col, born, lt in self.active_clones
+                                  if t_now - born < lt]
+
         # ── POWER-UP SPAWNING ──
         if self.elapsed > 2.0: # Only spawn after intro
             self.pu_spawn_timer -= dt
@@ -2942,8 +4025,8 @@ class Battle:
         for pu in self.powerups:
             if pu.update(dt):
                 hit_f = None
-                for cand in alive_fighters:
-                    if math.hypot(cand.x - pu.x, cand.y - pu.y) < cand.size + pu.size:
+                for cand in self.fighters: # Use self.fighters to allow picking up before checking if alive logic strips it out
+                    if cand.alive and math.hypot(cand.x - pu.x, cand.y - pu.y) < cand.size + pu.size:
                         hit_f = cand
                         break
                 if hit_f:
@@ -3007,27 +4090,36 @@ class Battle:
                                               knockback_y=-200*kb,
                                               attacker=proj.owner)
                         self.particles.emit_ring(proj.x, proj.y, proj.color, count=20, speed=200)
+                        self.particles.emit_impact(proj.x, proj.y, WHITE, count=10) # Added sparkle
                     else:
                         dx_ = f.x - proj.x
                         dy_ = f.y - proj.y
                         d_  = max(1, math.hypot(dx_, dy_))
                         f.take_damage(proj.damage,
-                                     knockback_x=dx_/d_*200,
-                                     knockback_y=-150,
+                                     knockback_x=dx_/d_*450,
+                                     knockback_y=-280,
                                      attacker=proj.owner)
+                        # Specific hit sparks
+                        self.particles.emit_impact(proj.x, proj.y, proj.color, count=12)
                     if not proj.piercing:
                         proj.alive = False
-                    self.particles.emit(proj.x, proj.y, proj.color, count=8, speed=150)
+                    self.particles.emit(proj.x, proj.y, WHITE, count=15, speed=250, size=5)
                     break
 
         self.projectiles = [p for p in self.projectiles if p.alive]
 
         # Win check
         alive_fighters = [f for f in self.fighters if f.alive]
+
+        # ── TIME LIMIT CHECK (1m 45s) ──
+        if not self.over and self.elapsed >= self.TIME_LIMIT:
+            self._resolve_time_up(alive_fighters)
+            return
+
         if self.is_br:
             if len(alive_fighters) <= 1:
                 self.over = True
-                self.shake = 0.0 # Stop shake for readability
+                self.shake = 0.0
                 self.winner_team = alive_fighters[0].team if alive_fighters else -1
                 self.over_timer = 3.0
                 self.particles.emit(WIDTH//2, HEIGHT//2, GOLD, count=60, speed=300, size=8, life=2.0)
@@ -3047,6 +4139,92 @@ class Battle:
                 self.winner_team = 0
                 self.over_timer = 3.0
                 self.particles.emit(WIDTH//2, HEIGHT//2, GOLD, count=60, speed=300, size=8, life=2.0)
+
+    def _resolve_time_up(self, alive_fighters):
+        """Judge winner when time limit is reached — multi-criteria scoring."""
+        self.over = True
+        self.time_up = True
+        self.shake = 0.0
+        self.over_timer = 3.0
+        self.particles.emit(WIDTH//2, HEIGHT//2, GOLD, count=60, speed=300, size=8, life=2.0)
+
+        if self.is_br:
+            # BR: Fighter with highest score wins
+            def br_score(f):
+                hp_pct = f.hp / f.max_hp if f.alive else 0
+                return f.kills * 300 + f.damage_dealt * 0.5 + hp_pct * 200
+            winner = max(self.fighters, key=br_score)
+            self.winner_team = winner.team
+            self.time_up_judgment = [
+                f"⏱️ TIME'S UP! Winner by JUDGMENT",
+                f"🏆 {winner.name} wins the decision!",
+                f"  Kills: {winner.kills}  |  Damage: {int(winner.damage_dealt)}  |  HP: {int(winner.hp)}/{winner.max_hp}",
+            ]
+        else:
+            # Team Battle: Score each team on 4 criteria
+            fighters_a = [f for f in self.fighters if f.team == 0]
+            fighters_b = [f for f in self.fighters if f.team == 1]
+
+            # Criterion 1: Surviving fighters
+            alive_a = sum(1 for f in fighters_a if f.alive)
+            alive_b = sum(1 for f in fighters_b if f.alive)
+            score_a, score_b = 0, 0
+            judgment = ["⏱️ TIME'S UP!  —  JUDGES' DECISION", ""]
+
+            if alive_a > alive_b:
+                score_a += 3; judgment.append(f"✅ Survivors: Blue {alive_a} vs Red {alive_b}  → +3 Blue")
+            elif alive_b > alive_a:
+                score_b += 3; judgment.append(f"✅ Survivors: Blue {alive_a} vs Red {alive_b}  → +3 Red")
+            else:
+                judgment.append(f"🔘 Survivors tied:  {alive_a} vs {alive_b}")
+
+            # Criterion 2: Total remaining HP %
+            hp_pct_a = sum(f.hp / f.max_hp for f in fighters_a if f.alive)
+            hp_pct_b = sum(f.hp / f.max_hp for f in fighters_b if f.alive)
+            if hp_pct_a > hp_pct_b + 0.05:
+                score_a += 2; judgment.append(f"✅ HP Pool: Blue {hp_pct_a*100:.0f}% vs Red {hp_pct_b*100:.0f}%  → +2 Blue")
+            elif hp_pct_b > hp_pct_a + 0.05:
+                score_b += 2; judgment.append(f"✅ HP Pool: Blue {hp_pct_a*100:.0f}% vs Red {hp_pct_b*100:.0f}%  → +2 Red")
+            else:
+                judgment.append(f"🔘 HP Pool tied:  {hp_pct_a*100:.0f}% vs {hp_pct_b*100:.0f}%")
+
+            # Criterion 3: Total damage dealt
+            dmg_a = sum(f.damage_dealt for f in fighters_a)
+            dmg_b = sum(f.damage_dealt for f in fighters_b)
+            if dmg_a > dmg_b * 1.1:
+                score_a += 1; judgment.append(f"✅ Damage: Blue {int(dmg_a)} vs Red {int(dmg_b)}  → +1 Blue")
+            elif dmg_b > dmg_a * 1.1:
+                score_b += 1; judgment.append(f"✅ Damage: Blue {int(dmg_a)} vs Red {int(dmg_b)}  → +1 Red")
+            else:
+                judgment.append(f"🔘 Damage tied:  {int(dmg_a)} vs {int(dmg_b)}")
+
+            # Criterion 4: Total kills
+            kills_a = sum(f.kills for f in fighters_a)
+            kills_b = sum(f.kills for f in fighters_b)
+            if kills_a > kills_b:
+                score_a += 2; judgment.append(f"✅ Kills: Blue {kills_a} vs Red {kills_b}  → +2 Blue")
+            elif kills_b > kills_a:
+                score_b += 2; judgment.append(f"✅ Kills: Blue {kills_a} vs Red {kills_b}  → +2 Red")
+            else:
+                judgment.append(f"🔘 Kills tied:  {kills_a} vs {kills_b}")
+
+            judgment.append("")
+            if score_a > score_b:
+                self.winner_team = 0
+                judgment.append(f"🏆 TEAM BLUE wins the decision!  ({score_a} – {score_b} pts)")
+            elif score_b > score_a:
+                self.winner_team = 1
+                judgment.append(f"🏆 TEAM RED wins the decision!  ({score_b} – {score_a} pts)")
+            else:
+                # Absolute tiebreaker: most HP remaining (raw)
+                if hp_pct_a >= hp_pct_b:
+                    self.winner_team = 0
+                    judgment.append(f"🏆 TEAM BLUE wins by TIEBREAKER  (HP edge)!")
+                else:
+                    self.winner_team = 1
+                    judgment.append(f"🏆 TEAM RED wins by TIEBREAKER  (HP edge)!")
+
+            self.time_up_judgment = judgment
 
     def draw(self, screen, font, font_small, font_big):
         # 1. Create/Get canvas
@@ -3093,11 +4271,47 @@ class Battle:
             pygame.draw.rect(canvas, (50, 60, 80), (r.left + self.shake_off()[0], r.top + self.shake_off()[1], r.width, r.height), 2)
 
         # Draw World Objects
-        for pu in self.powerups: pu.draw(canvas, font_small)
+        for pu in getattr(self, 'powerups', []): pu.draw(canvas, font_small)
         for proj in self.projectiles: proj.draw(canvas)
         self.particles.draw(canvas)
         for f in self.fighters: f.draw(canvas, font_small)
         for p in self.popups: p.draw(canvas, font_small, font_big)
+
+        # ── Draw Architect Temp Walls ──
+        so = self.shake_off()
+        for w, lifetime in getattr(self, 'temp_walls', []):
+            p1 = (int(w.a.x + so[0]), int(w.a.y + so[1]))
+            p2 = (int(w.b.x + so[0]), int(w.b.y + so[1]))
+            age_frac = max(0.0, (8.0 - lifetime) / 8.0)
+            # Stone colour: blue-grey fading to orange-red as timer expires
+            wall_c = (int(100 + age_frac*120), int(130 - age_frac*80), int(180 - age_frac*160))
+            pygame.draw.line(canvas, wall_c, p1, p2, 20)          # thick stone body
+            pygame.draw.line(canvas, (210, 200, 170), p1, p2, 6)  # bright mortar line
+            # Crumble flicker when nearly dead
+            if lifetime < 2.0 and int(pygame.time.get_ticks() * 0.005) % 2 == 0:
+                mx, my = (p1[0]+p2[0])//2, (p1[1]+p2[1])//2
+                pygame.draw.line(canvas, (50, 30, 10), (mx-8, my-6), (mx+8, my+6), 2)
+
+        # ── Draw Clone Master Active Clones ──
+        t_now = pygame.time.get_ticks() / 1000.0
+        for clone in getattr(self, 'active_clones', []):
+            cx_c, cy_c, col, born, lt = clone
+            age = t_now - born
+            if age > lt:
+                continue
+            alpha_frac = 1.0 - (age / lt)
+            r_c = max(4, int(alpha_frac * 18))
+            pulse = 0.7 + 0.3 * math.sin(t_now * 8 + cx_c * 0.01)
+            draw_col = tuple(min(255, int(c * pulse)) for c in col)
+            # Ghost body circle
+            pygame.draw.circle(canvas, draw_col,
+                               (int(cx_c + so[0]), int(cy_c + so[1])), r_c)
+            pygame.draw.circle(canvas, WHITE,
+                               (int(cx_c + so[0]), int(cy_c + so[1])), r_c, 1)
+            # X eye marks
+            fx, fy = int(cx_c + so[0]), int(cy_c + so[1])
+            pygame.draw.line(canvas, WHITE, (fx-4, fy-3), (fx+4, fy+3), 1)
+            pygame.draw.line(canvas, WHITE, (fx+4, fy-3), (fx-4, fy+3), 1)
 
         # Draw HUD (Inside shaking canvas for high-action feel)
         self._draw_hud(canvas, font, font_small)
@@ -3124,8 +4338,42 @@ class Battle:
                 txt = font_big.render("FIGHT!!", True, WHITE)
             screen.blit(txt, (WIDTH//2 - txt.get_width()//2, HEIGHT//2 - 100))
 
+        # ── TIME LIMIT COUNTDOWN WARNING ──
+        remaining = max(0, self.TIME_LIMIT - self.elapsed)
+        if remaining <= 20 and not self.over:
+            pulse = int(pygame.time.get_ticks() * 0.005) % 2 == 0
+            warn_c = RED if remaining <= 10 else ORANGE
+            warn_txt = font_big.render(f"⏱ {int(remaining)}s", True, warn_c if pulse else WHITE)
+            screen.blit(warn_txt, (WIDTH//2 - warn_txt.get_width()//2, 55))
+            if remaining <= 10:
+                flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                flash.fill((*RED, 25))
+                screen.blit(flash, (0, 0))
+
         # Win screen (Always on top, no shake for readability)
         if self.over:
+            if self.time_up and self.time_up_judgment:
+                # ── JUDGMENT SCREEN ──
+                color = BLUE if self.winner_team == 0 else (RED if self.winner_team == 1 else GOLD)
+                panel_h = 60 + len(self.time_up_judgment) * 28 + 80
+                panel = pygame.Rect(WIDTH//2 - 360, 120, 720, panel_h)
+                bg = pygame.Surface((720, panel_h), pygame.SRCALPHA)
+                bg.fill((8, 8, 20, 230))
+                screen.blit(bg, (panel.x, panel.y))
+                pygame.draw.rect(screen, color, panel, 3, border_radius=14)
+                y_j = panel.y + 18
+                for i, line in enumerate(self.time_up_judgment):
+                    line_c = color if (i == 0 or i == len(self.time_up_judgment)-1) else WHITE
+                    if "✅" in line: line_c = (100, 255, 120)
+                    if "🔘" in line: line_c = (160, 160, 160)
+                    if "🏆" in line: line_c = GOLD
+                    s = font.render(line, True, line_c)
+                    screen.blit(s, (WIDTH//2 - s.get_width()//2, y_j))
+                    y_j += 28
+                ret_txt = font.render("PRESS [SPACE] TO RETURN TO MENU", True, WHITE if int(self.timer*2)%2==0 else SILVER)
+                screen.blit(ret_txt, (WIDTH//2 - ret_txt.get_width()//2, panel.bottom + 20))
+                return  # skip normal win screen
+
             if self.is_br:
                 winner_name = "NONE"
                 color = GOLD
@@ -3221,8 +4469,14 @@ class Battle:
                     pygame.draw.rect(screen, ab.color, (ab_x, ab_y+16, int(180*frac), 4))
 
         # Timer
-        mins = int(self.elapsed) // 60
-        secs = int(self.elapsed) % 60
+        # Show remaining time instead of elapsed when under 30s left
+        remaining = max(0, self.TIME_LIMIT - self.elapsed)
+        if remaining <= 30:
+            mins = int(remaining) // 60
+            secs = int(remaining) % 60
+        else:
+            mins = int(self.elapsed) // 60
+            secs = int(self.elapsed) % 60
         timer_txt = font.render(f"{mins:02d}:{secs:02d}", True, WHITE)
         screen.blit(timer_txt, (WIDTH//2 - timer_txt.get_width()//2, 12))
 
