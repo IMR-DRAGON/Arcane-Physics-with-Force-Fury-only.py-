@@ -10,7 +10,7 @@ from enum import Enum
 import numpy as np
 
 # ─── CONSTANTS ───────────────────────────────────────────────────────────────
-WIDTH, HEIGHT = 1440, 900
+WIDTH, HEIGHT = 540, 960
 FPS = 60
 GRAVITY = 0
 
@@ -3785,7 +3785,7 @@ class Battle:
         self.timer = 0.0
         self.sd_start = 45 if is_br else 60
         self.sd_active = False
-        self.orig_arena_size = 600
+        self.orig_arena_size = 440
         self.powerups: List[PowerUp] = []
         self.pu_spawn_timer = 10.0 # First one at 10s
         self.TIME_LIMIT = 105.0  # 1 minute 45 seconds
@@ -3794,7 +3794,7 @@ class Battle:
         self.time_up_judgment = []  # List of strings explaining the judgment
 
         # ── ARENA GENERATION ──
-        self.arena_size = 600
+        self.arena_size = 440
         self.arena_rect = pygame.Rect((WIDTH-self.arena_size)//2, (HEIGHT-self.arena_size)//2, self.arena_size, self.arena_size)
         r = self.arena_rect
         static = self.space.static_body
@@ -3811,7 +3811,7 @@ class Battle:
         elif arena_type == "OCTAGON":
             # 8-sided arena
             cx, cy = WIDTH//2, HEIGHT//2
-            rad = 320
+            rad = 240
             pts = []
             for i in range(8):
                 ang = i * (math.pi*2/8)
@@ -4323,7 +4323,7 @@ class Battle:
         # Draw Sudden Death Warning
         if self.sd_active:
             sd_txt = font_big.render("SUDDEN DEATH!!", True, RED)
-            screen.blit(sd_txt, (WIDTH//2 - sd_txt.get_width()//2, 80))
+            screen.blit(sd_txt, (WIDTH//2 - sd_txt.get_width()//2, 150))
             # Intense screen flash on SD start
             if self.elapsed < self.sd_start + 0.3:
                 flash = pygame.Surface((WIDTH, HEIGHT))
@@ -4356,8 +4356,8 @@ class Battle:
                 # ── JUDGMENT SCREEN ──
                 color = BLUE if self.winner_team == 0 else (RED if self.winner_team == 1 else GOLD)
                 panel_h = 60 + len(self.time_up_judgment) * 28 + 80
-                panel = pygame.Rect(WIDTH//2 - 360, 120, 720, panel_h)
-                bg = pygame.Surface((720, panel_h), pygame.SRCALPHA)
+                panel = pygame.Rect(WIDTH//2 - 240, 120, 480, panel_h)
+                bg = pygame.Surface((480, panel_h), pygame.SRCALPHA)
                 bg.fill((8, 8, 20, 230))
                 screen.blit(bg, (panel.x, panel.y))
                 pygame.draw.rect(screen, color, panel, 3, border_radius=14)
@@ -4400,7 +4400,7 @@ class Battle:
             screen.blit(mvp_txt, (WIDTH//2 - mvp_txt.get_width()//2, 240))
             
             # Stats Display
-            stats_box = pygame.Rect(WIDTH//2 - 250, 290, 500, 220)
+            stats_box = pygame.Rect(WIDTH//2 - 230, 290, 460, 220)
             pygame.draw.rect(screen, (20, 20, 40, 220), stats_box, border_radius=15)
             pygame.draw.rect(screen, color, stats_box, 3, border_radius=15)
             
@@ -4487,7 +4487,6 @@ class Battle:
 
     def _draw_hud(self, screen, font, font_small):
         # In Battle Royale, every fighter is a separate entity
-        # In Team Mode, we filter for teams 0 and 1
         if self.is_br:
             mid = (len(self.fighters) + 1) // 2
             list_a = self.fighters[:mid]
@@ -4496,42 +4495,56 @@ class Battle:
             list_a = [f for f in self.fighters if f.team == 0]
             list_b = [f for f in self.fighters if f.team == 1]
 
-        def draw_team_panel(fighters, x_start, color):
+        def draw_team_panel(fighters, side, color):
+            panel_w, panel_h = 240, 50
+            if side == "left":
+                px = 15
+            else:
+                px = WIDTH - panel_w - 15
+            
+            # Start below the arena
+            start_y = (HEIGHT + self.arena_size) // 2 + 10
+            
             for i, f in enumerate(fighters):
-                px = x_start
-                py = (HEIGHT - len(fighters)*60)//2 + i*60
+                py = start_y + i * (panel_h + 4)
+                if py > HEIGHT - panel_h: # Safety wrap
+                    # If too many fighters, shrink panel height or shift
+                    pass
+
                 # Panel bg
-                panel = pygame.Surface((170, 55), pygame.SRCALPHA)
-                panel.fill((0, 0, 0, 150))
-                screen.blit(panel, (px, py))
-                pygame.draw.rect(screen, color, (px, py, 170, 55), 2)
+                surf = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+                surf.fill((0, 0, 0, 160))
+                screen.blit(surf, (px, py))
+                pygame.draw.rect(screen, color, (px, py, panel_w, panel_h), 1)
+                
                 # Name
-                n_surf = font_small.render(f.name, True, color)
-                screen.blit(n_surf, (px+5, py+3))
+                name_txt = f.name
+                n_surf = font_small.render(name_txt, True, color)
+                screen.blit(n_surf, (px+6, py+3))
+                
                 # HP bar
                 hp_frac = f.hp / f.max_hp
-                hp_c = (int(220*(1-hp_frac)), int(220*hp_frac), 40)
-                pygame.draw.rect(screen, (40,40,40), (px+5, py+20, 160, 12))
-                pygame.draw.rect(screen, hp_c, (px+5, py+20, int(160*hp_frac), 12))
-                pygame.draw.rect(screen, WHITE, (px+4, py+19, 162, 14), 1)
+                hp_c = (int(255*(1-hp_frac)), int(255*hp_frac), 40)
+                pygame.draw.rect(screen, (40,40,40), (px+6, py+18, panel_w-12, 12))
+                pygame.draw.rect(screen, hp_c, (px+6, py+18, int((panel_w-12)*hp_frac), 12))
+                
                 # HP text
                 hp_txt = font_small.render(f"{int(f.hp)}/{f.max_hp}", True, WHITE)
-                screen.blit(hp_txt, (px+5, py+35))
-                # Ability cooldowns
+                screen.blit(hp_txt, (px + panel_w//2 - hp_txt.get_width()//2, py+17))
+                
+                # Ability dots
                 for j, ab in enumerate(f.abilities):
-                    cx = px + 5 + j*40
-                    cy = py + 48
-                    c = ab.color if ab.ready() else (50,50,60)
-                    pygame.draw.rect(screen, c, (cx, cy, 35, 5))
+                    adx = px + 6 + j*58
+                    ady = py + 34
+                    ac = ab.color if ab.ready() else (50,50,60)
+                    pygame.draw.rect(screen, ac, (adx, ady, 52, 5))
                     if not ab.ready():
                         frac = 1 - (ab.timer / ab.cooldown)
-                        pygame.draw.rect(screen, ab.color, (cx, cy, int(35*frac), 5))
+                        pygame.draw.rect(screen, ab.color, (adx, ady, int(52*frac), 5))
 
-        # Position panels left/right of arena center
-        left_edge = (WIDTH - self.arena_size) // 2
-        right_edge = left_edge + self.arena_size
-        draw_team_panel(list_a, left_edge - 180, BLUE if not self.is_br else (100, 180, 255))
-        draw_team_panel(list_b, right_edge + 10, RED if not self.is_br else (255, 150, 100))
+        # Position panels: Left for A, Right for B
+        draw_team_panel(list_a, "left", BLUE if not self.is_br else (100, 180, 255))
+        draw_team_panel(list_b, "right", RED if not self.is_br else (255, 150, 100))
 
 # ─── MENU SYSTEM ──────────────────────────────────────────────────────────────
 class Menu:
@@ -4557,6 +4570,8 @@ class Menu:
 
         self.particles = ParticleSystem()
         self.bg_timer = 0.0
+        self.scroll_y = 0.0
+        self.max_scroll = 500.0
 
     def needed_counts(self):
         mode = self.modes[self.mode_idx]
@@ -4588,13 +4603,15 @@ class Menu:
                     self.state = "char_select"
                 elif event.key == pygame.K_ESCAPE:
                     self.state = "main"
+            if event.type == pygame.MOUSEWHEEL:
+                self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - event.y * 30))
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
                 # Left arrow
-                if 500 < mx < 560 and HEIGHT//2 - 30 < my < HEIGHT//2 + 30:
+                if WIDTH//2 - 220 < mx < WIDTH//2 - 160 and HEIGHT//2 - 80 < my < HEIGHT//2:
                     self.mode_idx = (self.mode_idx - 1) % len(self.modes)
                 # Right arrow
-                elif WIDTH-560 < mx < WIDTH-500 and HEIGHT//2 - 30 < my < HEIGHT//2 + 30:
+                elif WIDTH//2 + 160 < mx < WIDTH//2 + 220 and HEIGHT//2 - 80 < my < HEIGHT//2:
                     self.mode_idx = (self.mode_idx + 1) % len(self.modes)
                 else:
                     self.needed_a, self.needed_b = self.needed_counts()
@@ -4604,20 +4621,34 @@ class Menu:
                     self.state = "char_select"
 
         elif self.state == "char_select":
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self.state = "mode_select"
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.state = "mode_select"
+                elif event.key == pygame.K_UP:
+                    self.scroll_y = max(0, self.scroll_y - 40)
+                elif event.key == pygame.K_DOWN:
+                    self.scroll_y = min(self.max_scroll, self.scroll_y + 40)
+                elif event.key == pygame.K_PAGEUP:
+                    self.scroll_y = max(0, self.scroll_y - 300)
+                elif event.key == pygame.K_PAGEDOWN:
+                    self.scroll_y = min(self.max_scroll, self.scroll_y + 300)
+                
+            if event.type == pygame.MOUSEWHEEL:
+                self.scroll_y = max(0, min(self.max_scroll, self.scroll_y - event.y * 50))
+                
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
-                card_w, card_h = 115, 90
-                cols = 10
-                start_x = WIDTH//2 - (cols * (card_w+12))//2
-                start_y = 100
+                my_adj = my + self.scroll_y
+                card_w, card_h = 120, 92
+                cols = 4
+                start_x = WIDTH//2 - (cols * (card_w+8))//2
+                start_y = 110
                 for i, name in enumerate(self.chars):
                     col = i % cols
                     row = i // cols
-                    cx = start_x + col*(card_w+12)
-                    cy = start_y + row*(card_h+12)
-                    if cx <= mx <= cx+card_w and cy <= my <= cy+card_h:
+                    cx = start_x + col*(card_w+8)
+                    cy = start_y + row*(card_h+8)
+                    if cx <= mx <= cx+card_w and cy <= my_adj <= cy+card_h:
                         if self.selecting_team == 0 and len(self.selected_a) < self.needed_a:
                             self.selected_a.append(name)
                             self.particles.emit(mx, my, BLUE, count=15, speed=150)
@@ -4631,12 +4662,15 @@ class Menu:
                             if len(self.selected_b) == self.needed_b:
                                 self.state = "battle"
 
-                # Independent Start button for BR
-                if self.modes[self.mode_idx] == "Battle Royale":
-                    if 1040 <= mx <= 1190 and 690 <= my <= 790 and len(self.selected_a) >= 2:
-                        self.state = "battle"
-                    elif len(self.selected_a) >= 8:
-                        self.state = "battle"
+                # Independent Start button
+                footer_y = HEIGHT - 110
+                btn_w, btn_h = 180, 45
+                bx, by = WIDTH - btn_w - 20, footer_y + 30
+                can_start = (self.modes[self.mode_idx] == "Battle Royale" and len(self.selected_a) >= 2) or \
+                           (len(self.selected_a) == self.needed_a and len(self.selected_b) == self.needed_b)
+                
+                if can_start and bx <= mx <= bx+btn_w and by <= my <= by+btn_h:
+                    self.state = "battle"
 
     def update(self, dt):
         self.bg_timer += dt
@@ -4669,16 +4703,18 @@ class Menu:
         sub = self.font.render("Physics-Based Combat Simulation", True, SILVER)
         screen.blit(sub, (WIDTH//2 - sub.get_width()//2, 195))
 
-        # Animated character previews
-        chars_preview = list(CHARACTER_DATA.keys())
+        # Animated character previews (Wrapped)
+        chars_preview = list(CHARACTER_DATA.keys())[:12] # Show fewer in wrap
         for i, name in enumerate(chars_preview):
-            x = 80 + i * 120
-            y = 360 + int(math.sin(self.bg_timer*1.5 + i*0.5)*12)
+            col = i % 4
+            row = i // 4
+            x = 80 + col * 125
+            y = 340 + row * 85 + int(math.sin(self.bg_timer*1.5 + i*0.5)*10)
             data = CHARACTER_DATA[name]
-            pygame.draw.circle(screen, data["color"], (x, y), 22)
-            pygame.draw.circle(screen, data["body_color"], (x, y), 22, 3)
-            lbl = self.font_small.render(name, True, data["color"])
-            screen.blit(lbl, (x - lbl.get_width()//2, y + 28))
+            pygame.draw.circle(screen, data["color"], (x, y), 20)
+            pygame.draw.circle(screen, data["body_color"], (x, y), 20, 3)
+            lbl = self.font_small.render(name.split(" ")[1][:8], True, data["color"])
+            screen.blit(lbl, (x - lbl.get_width()//2, y + 25))
 
         start_txt = self.font.render("PRESS SPACE OR CLICK TO START", True,
                                      WHITE if int(self.bg_timer*2)%2==0 else GOLD)
@@ -4743,152 +4779,137 @@ class Menu:
         screen.blit(esc_txt, (20, HEIGHT - 30))
 
     def _draw_char_select(self, screen):
-
-        if self.modes[self.mode_idx] == "Battle Royale":
-            title_txt = "BATTLE ROYALE"
-            title_c = GOLD
-            needed = 8
-            selected = self.selected_a
+        # 1. Header (Fixed)
+        is_br = self.modes[self.mode_idx] == "Battle Royale"
+        if is_br:
+            title_txt, title_c, needed, selected = "BATTLE ROYALE", GOLD, 8, self.selected_a
             hint_txt = f"Choose 2 to 8 Fighters ({len(selected)}/8)"
         else:
-            title_txt = "SELECT TEAM BLUE" if self.selecting_team == 0 else "SELECT TEAM RED"
-            title_c   = BLUE if self.selecting_team == 0 else RED
-            needed = self.needed_a if self.selecting_team == 0 else self.needed_b
-            selected = self.selected_a if self.selecting_team == 0 else self.selected_b
+            is_a = self.selecting_team == 0
+            title_txt = "SELECT TEAM BLUE" if is_a else "SELECT TEAM RED"
+            title_c   = BLUE if is_a else RED
+            needed = self.needed_a if is_a else self.needed_b
+            selected = self.selected_a if is_a else self.selected_b
             hint_txt = f"Choose {needed} character{'s' if needed>1 else ''}  ({len(selected)}/{needed} selected)"
 
         title = self.font_big.render(title_txt, True, title_c)
         screen.blit(title, (WIDTH//2 - title.get_width()//2, 20))
-
         progress = self.font.render(hint_txt, True, WHITE)
         screen.blit(progress, (WIDTH//2 - progress.get_width()//2, 70))
-        
-        if self.modes[self.mode_idx] == "Battle Royale" and len(selected) >= 2:
-            # START Button
-            pygame.draw.rect(screen, GREEN, (1050, 700, 130, 80), border_radius=10)
-            st_txt = self.font.render("START", True, BLACK)
-            screen.blit(st_txt, (1050 + 130//2 - st_txt.get_width()//2, 700 + 80//2 - st_txt.get_height()//2))
 
-        # Character cards
-        card_w, card_h = 114, 88
-        cols = 10
-        start_x = WIDTH//2 - (cols * (card_w+10))//2
-        start_y = 120
+        # 2. Scrollable Gallery
+        card_w, card_h = 122, 95
+        cols = 4
+        start_x = WIDTH//2 - (cols * (card_w+8))//2
+        start_y = 10
         mx, my = pygame.mouse.get_pos()
+        my_adj = my + self.scroll_y - 110 # Gallery starts at y=110
 
+        rows = (len(self.chars) + cols - 1) // cols
+        gallery_h = rows * (card_h + 8) + 40
+        self.max_scroll = max(0, gallery_h - (HEIGHT - 230))
+        
+        gallery = pygame.Surface((WIDTH, gallery_h), pygame.SRCALPHA)
         hover_target = None
 
         for i, name in enumerate(self.chars):
             col = i % cols
             row = i // cols
-            cx = start_x + col*(card_w+10)
-            cy = start_y + row*(card_h+10)
+            cx = start_x + col*(card_w+8)
+            cy = start_y + row*(card_h+8)
             data = CHARACTER_DATA[name]
 
             in_a = name in self.selected_a
             in_b = name in self.selected_b
-            hovered = cx <= mx <= cx+card_w and cy <= my <= cy+card_h
-            if hovered: hover_target = (cx, cy, name, data)
+            hovered = cx <= mx <= cx+card_w and cy <= my_adj <= cy+card_h
+            if hovered and 110 <= my <= HEIGHT - 110: 
+                hover_target = (cx, cy - self.scroll_y + 110, name, data)
 
-            # Card background
-            bg_c = (25,25,50)
-            if in_a: bg_c = (10,20,60)
-            if in_b: bg_c = (60,10,20)
-            if hovered: bg_c = (35,35,65)
-            pygame.draw.rect(screen, bg_c, (cx, cy, card_w, card_h), border_radius=8)
+            # Draw Card
+            bg_f = (15,45,100,230) if in_a else (120,25,35,230) if in_b else (25,25,50,200)
+            if hovered: bg_f = tuple(min(255, c+40) for c in bg_f)
+            pygame.draw.rect(gallery, bg_f, (cx, cy, card_w, card_h), border_radius=10)
+            pygame.draw.rect(gallery, (GOLD if hovered else WHITE), (cx, cy, card_w, card_h), 1 if not hovered else 2, border_radius=10)
 
-            # Border
-            border_c = (60,60,80)
-            if in_a: border_c = BLUE
-            if in_b: border_c = RED
-            if hovered and not in_a and not in_b: border_c = GOLD
-            pygame.draw.rect(screen, border_c, (cx, cy, card_w, card_h), 2, border_radius=8)
+            # Icon & Name
+            p = name.split(" ")
+            gallery.blit(self.font_big.render(p[0], True, WHITE), (cx+card_w//2-20, cy+10))
+            n_s = self.font_small.render(p[1] if len(p)>1 else "", True, WHITE)
+            gallery.blit(n_s, (cx+card_w//2-n_s.get_width()//2, cy+62))
 
-            # Character circle
-            cc_x = cx + card_w//2
-            cc_y = cy + 28
-            pygame.draw.circle(screen, data["color"], (cc_x, cc_y), 18)
-            pygame.draw.circle(screen, WHITE, (cc_x, cc_y), 18, 2)
-
-            # Team indicators (Updated for multiple selections)
-            if self.modes[self.mode_idx] == "Battle Royale":
-                cnt = self.selected_a.count(name)
-                if cnt > 0:
-                    txt = f"x{cnt}"
-                    t = self.font_small.render(txt, True, GOLD)
-                    screen.blit(t, (cx+4, cy+4))
+            # Selected indicators
+            if is_br:
+                ct = self.selected_a.count(name)
+                if ct > 0: gallery.blit(self.font_small.render(f"x{ct}", True, GOLD), (cx+6, cy+6))
             else:
-                if in_a:
-                    count_a = self.selected_a.count(name)
-                    txt = "A" if count_a == 1 else f"A x{count_a}"
-                    t = self.font_small.render(txt, True, WHITE)
-                    screen.blit(t, (cx+4, cy+4))
-                if in_b:
-                    count_b = self.selected_b.count(name)
-                    txt = "B" if count_b == 1 else f"B x{count_b}"
-                    t = self.font_small.render(txt, True, WHITE)
-                    screen.blit(t, (cx + card_w - t.get_width() - 4, cy+4))
+                ca, cb = self.selected_a.count(name), self.selected_b.count(name)
+                if ca>0: gallery.blit(self.font_small.render(f"A{ca if ca>1 else ''}", True, CYAN), (cx+6, cy+6))
+                if cb>0: gallery.blit(self.font_small.render(f"B{cb if cb>1 else ''}", True, PINK), (cx+card_w-20, cy+6))
 
-            # Name
-            n_surf = self.font_small.render(name, True, data["color"])
-            screen.blit(n_surf, (cc_x - n_surf.get_width()//2, cy + 50))
+        gallery_rect = pygame.Rect(0, 110, WIDTH, HEIGHT - 220)
+        screen.set_clip(gallery_rect)
+        screen.blit(gallery, (0, 110 - self.scroll_y))
+        screen.set_clip(None)
 
-        # ── DRAW TOOLTIP LAST (Always On Top) ──
+        # 2.5 Scrollbar Visual
+        if self.max_scroll > 0:
+            bar_bh = HEIGHT - 220
+            bar_h = max(20, (bar_bh / (self.max_scroll + bar_bh)) * bar_bh)
+            bar_y = 110 + (self.scroll_y / self.max_scroll) * (bar_bh - bar_h)
+            pygame.draw.rect(screen, (50, 50, 70), (WIDTH - 8, 110, 4, bar_bh))
+            pygame.draw.rect(screen, GOLD, (WIDTH - 8, bar_y, 4, bar_h))
+
+        # 3. Footer (Fixed)
+        footer_y = HEIGHT - 110
+        pygame.draw.rect(screen, (10,10,20), (0, footer_y, WIDTH, 110))
+        pygame.draw.line(screen, (50,50,70), (0, footer_y), (WIDTH, footer_y), 2)
+
+        # Team Summaries
+        if self.modes[self.mode_idx] == "Battle Royale":
+            sel_txt = "Selected: " + (", ".join(self.selected_a[:4]) + ("..." if len(self.selected_a)>4 else ""))
+            s_surf = self.font_small.render(sel_txt or "No one selected", True, GOLD)
+            screen.blit(s_surf, (20, footer_y + 10))
+        else:
+            a_txt = "Blue: " + (", ".join([s.split(" ")[-1] for s in self.selected_a]) or "---")
+            b_txt = "Red:  " + (", ".join([s.split(" ")[-1] for s in self.selected_b]) or "---")
+            asurf = self.font_small.render(a_txt, True, BLUE)
+            bsurf = self.font_small.render(b_txt, True, RED)
+            screen.blit(asurf, (20, footer_y + 8))
+            screen.blit(bsurf, (20, footer_y + 26))
+
+        # Start button
+        if (self.modes[self.mode_idx] == "Battle Royale" and len(self.selected_a) >= 2) or \
+           (len(self.selected_a) == self.needed_a and len(self.selected_b) == self.needed_b):
+            btn_w, btn_h = 220, 50
+            bx, by = WIDTH - btn_w - 20, footer_y + 30
+            pygame.draw.rect(screen, GREEN, (bx, by, btn_w, btn_h), border_radius=12)
+            st_t = self.font.render("START BATTLE", True, BLACK)
+            screen.blit(st_t, (bx + btn_w//2 - st_t.get_width()//2, by + btn_h//2 - st_t.get_height()//2))
+
+        # Tooltip (Always on Top)
         if hover_target:
-            cx, cy, name, data = hover_target
-            # Tooltip geometry
-            desc_lines = data["description"].split("\n")
-            tip_w = 300 
-            tip_x = cx + card_w + 8
-            if tip_x + tip_w > WIDTH: tip_x = cx - tip_w - 8
-            tip_y = cy - 20 # Offset up slightly
-            
-            # Height includes: Name, Descr, Abiliries, and the new Hidden Trait pool
-            tip_h = 50 + len(desc_lines)*18 + len(data.get("abilities", []))*20 + 45
-            
-            tip_surf = pygame.Surface((tip_w, tip_h), pygame.SRCALPHA)
-            tip_surf.fill((10, 10, 30, 245)) # Slightly more opaque for premium feel
-            pygame.draw.rect(tip_surf, GOLD, (0, 0, tip_w, tip_h), 2, border_radius=12)
-            screen.blit(tip_surf, (tip_x, tip_y))
-            
-            y_off = 15
-            # Header with Icon
-            icon_txt = "💎"
-            n_s = self.font.render(f"{icon_txt} {name}", True, data["color"])
-            screen.blit(n_s, (tip_x+12, tip_y+y_off)); y_off += 32
-            
-            # Description
-            for line in desc_lines:
-                l_s = self.font_small.render(line.strip(), True, SILVER)
-                screen.blit(l_s, (tip_x+12, tip_y+y_off)); y_off += 18
-            
-            y_off += 8
-            # Abilities
-            for ab in data["abilities"]:
-                # Draw small bullet
-                pygame.draw.rect(screen, ab.color, (tip_x+12, tip_y+y_off+5, 4, 4))
-                ab_s = self.font_small.render(f"  {ab.name}: {int(ab.damage)} dmg", True, WHITE)
-                screen.blit(ab_s, (tip_x+18, tip_y+y_off)); y_off += 20
-
-            # ── HIDDEN TRAIT POOL ──
-            y_off += 10
-            pygame.draw.line(screen, (50, 50, 70), (tip_x+10, tip_y+y_off), (tip_x+tip_w-10, tip_y+y_off), 1)
-            y_off += 8
-            trait_lbl = self.font_small.render("Rare Hidden Traits Pool (Luck-based):", True, GOLD)
-            screen.blit(trait_lbl, (tip_x+12, tip_y+y_off)); y_off += 16
-            traits_txt = self.font_small.render("• RAGE   • ASCENSION   • WIND   • REBIRTH", True, (255, 230, 150))
-            screen.blit(traits_txt, (tip_x+12, tip_y+y_off))
-
-        # Selected display
-        sel_y = start_y + ((len(self.chars)-1)//cols + 1)*(card_h+12) + 10
-        a_lbl = self.font.render("Team Blue: " + ("  ".join(self.selected_a) or "---"), True, BLUE)
-        b_lbl = self.font.render("Team Red:  " + ("  ".join(self.selected_b) or "---"), True, RED)
-        screen.blit(a_lbl, (20, sel_y))
-        screen.blit(b_lbl, (20, sel_y+28))
+            self._draw_tooltip(screen, hover_target[0], hover_target[1], hover_target[3], hover_target[2])
 
         self.particles.draw(screen)
-        esc_txt = self.font_small.render("ESC = back to mode select", True, SILVER)
-        screen.blit(esc_txt, (20, HEIGHT-28))
+        screen.blit(self.font_small.render("ESC = Back to Mode Select", True, SILVER), (20, HEIGHT - 22))
+
+    def _draw_tooltip(self, screen, cx, cy, data, name):
+        lines = data["description"].split("\n")
+        tip_w = 260
+        tx = cx + 130 if cx + 130 + tip_w < WIDTH else cx - tip_w - 10
+        ty = max(115, min(cy - 20, HEIGHT - 350))
+        th = 45 + len(lines)*18 + len(data["abilities"])*22 + 40
+        ts = pygame.Surface((tip_w, th), pygame.SRCALPHA); ts.fill((10,10,30,240))
+        pygame.draw.rect(ts, GOLD, (0,0,tip_w,th), 2, border_radius=12)
+        screen.blit(ts, (tx, ty))
+        curr_y = ty + 12
+        screen.blit(self.font.render(name, True, data["color"]), (tx+12, curr_y)); curr_y += 30
+        for l in lines:
+            screen.blit(self.font_small.render(l.strip(), True, SILVER), (tx+12, curr_y)); curr_y += 18
+        curr_y += 8
+        for ab in data["abilities"]:
+            pygame.draw.circle(screen, ab.color, (tx+16, curr_y+8), 4)
+            screen.blit(self.font_small.render(f"{ab.name}: {int(ab.damage)} dmg", True, WHITE), (tx+25, curr_y)); curr_y += 22
 
 # ─── MAIN GAME LOOP ───────────────────────────────────────────────────────────
 def main():
