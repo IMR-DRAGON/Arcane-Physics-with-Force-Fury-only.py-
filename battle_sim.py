@@ -3917,6 +3917,12 @@ class Battle:
             f.battle_ref = self
             self.fighters.append(f)
 
+        # 1v1 HP Boost (70% more health)
+        if len(team_a) == 1 and len(team_b) == 1 and not is_br:
+            for f in self.fighters:
+                f.max_hp = int(f.max_hp * 1.7)
+                f.hp = f.max_hp
+
         # Teams strategy (Priority Target) - must happen after fighters are spawned
         self.team_priorities = {}
         if is_br:
@@ -4543,24 +4549,28 @@ class Battle:
         # ── 1v1 ABILITY FLASHCARDS ──
         is_1v1 = len(list_a) == 1 and len(list_b) == 1 and not self.is_br
         if is_1v1:
-            def draw_flashcard(fighter, x, color):
-                card_w, card_h = 220, 75
-                # Place at the very bottom corners
-                y = HEIGHT - card_h - 15
+            def draw_flashcard(fighter, x, color, y_start):
+                card_w, card_h = 240, 105
+                # Place directly below the team panels
+                y = y_start + 60
                 bg = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
                 bg.fill((0, 0, 0, 180))
                 screen.blit(bg, (x, y))
-                pygame.draw.rect(screen, color, (x, y, card_w, card_h), 2, border_radius=10)
+                pygame.draw.rect(screen, color, (x, y, card_w, card_h), 2, border_radius=12)
                 
                 for j, ab in enumerate(fighter.abilities):
                     # Ability Name : Damage
-                    name_s = font_small.render(ab.name[:12], True, color)
+                    name_s = font_small.render(ab.name, True, color)
                     dmg_s = font_small.render(f"{int(ab.damage)} DMG", True, WHITE)
-                    screen.blit(name_s, (x + 10, y + 10 + j*20))
-                    screen.blit(dmg_s, (x + card_w - dmg_s.get_width() - 10, y + 10 + j*20))
+                    # Vertical spacing
+                    yy = y + 10 + j*22
+                    screen.blit(name_s, (x + 10, yy))
+                    screen.blit(dmg_s, (x + card_w - dmg_s.get_width() - 10, yy))
 
-            draw_flashcard(list_a[0], 25, BLUE)
-            draw_flashcard(list_b[0], WIDTH - 245, RED)
+            # Find the starting Y of health bars
+            sy = (HEIGHT + self.arena_size) // 2 + 10
+            draw_flashcard(list_a[0], 15, BLUE, sy)
+            draw_flashcard(list_b[0], WIDTH - 255, RED, sy)
 
 # ─── MENU SYSTEM ──────────────────────────────────────────────────────────────
 class Menu:
