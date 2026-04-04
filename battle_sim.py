@@ -4496,8 +4496,7 @@ class Battle:
             list_b = [f for f in self.fighters if f.team == 1]
 
         def draw_team_panel(fighters, side, color):
-            is_1v1 = len(list_a) == 1 and len(list_b) == 1 and not self.is_br
-            panel_w, panel_h = 240, (90 if is_1v1 else 50)
+            panel_w, panel_h = 240, 50
             if side == "left":
                 px = 15
             else:
@@ -4527,37 +4526,41 @@ class Battle:
                 hp_txt = font_small.render(f"{int(f.hp)}/{f.max_hp}", True, WHITE)
                 screen.blit(hp_txt, (px + panel_w//2 - hp_txt.get_width()//2, py+17))
                 
-                # Ability Details
+                # Ability dots (Simple)
                 for j, ab in enumerate(f.abilities):
-                    adx = px + 6 + (j*78 if is_1v1 else j*58)
-                    ady = py + (40 if is_1v1 else 34)
-                    aw = 74 if is_1v1 else 52
+                    adx = px + 6 + j*58
+                    ady = py + 34
                     ac = ab.color if ab.ready() else (50,50,60)
-                    
-                    if is_1v1:
-                        # Draw Name + Bar for 1v1
-                        ab_name = ab.name.split(" ")[0][:8]
-                        ab_s = font_small.render(ab_name, True, ac if ab.ready() else SILVER)
-                        screen.blit(ab_s, (adx, ady - 6))
-                        pygame.draw.rect(screen, (30,30,30), (adx, ady + 12, aw, 6))
-                        pygame.draw.rect(screen, ac, (adx, ady + 12, aw, 6))
-                        if not ab.ready():
-                            frac = 1 - (ab.timer / ab.cooldown)
-                            pygame.draw.rect(screen, (50,50,60), (adx, ady + 12, aw, 6))
-                            pygame.draw.rect(screen, ab.color, (adx, ady + 12, int(aw*frac), 6))
-                            # Cooldown time
-                            cd_t = font_small.render(f"{ab.timer:.1}s", True, WHITE)
-                            screen.blit(cd_t, (adx + aw//2 - cd_t.get_width()//2, ady + 22))
-                    else:
-                        # Simple bars for other modes
-                        pygame.draw.rect(screen, ac, (adx, ady, aw, 5))
-                        if not ab.ready():
-                            frac = 1 - (ab.timer / ab.cooldown)
-                            pygame.draw.rect(screen, ab.color, (adx, ady, int(aw*frac), 5))
+                    pygame.draw.rect(screen, ac, (adx, ady, 52, 5))
+                    if not ab.ready():
+                        frac = 1 - (ab.timer / ab.cooldown)
+                        pygame.draw.rect(screen, ab.color, (adx, ady, int(52*frac), 5))
 
         # Position panels: Left for A, Right for B
         draw_team_panel(list_a, "left", BLUE if not self.is_br else (100, 180, 255))
         draw_team_panel(list_b, "right", RED if not self.is_br else (255, 150, 100))
+
+        # ── 1v1 ABILITY FLASHCARDS ──
+        is_1v1 = len(list_a) == 1 and len(list_b) == 1 and not self.is_br
+        if is_1v1:
+            def draw_flashcard(fighter, x, color):
+                card_w, card_h = 220, 75
+                # Place at the very bottom corners
+                y = HEIGHT - card_h - 15
+                bg = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+                bg.fill((0, 0, 0, 180))
+                screen.blit(bg, (x, y))
+                pygame.draw.rect(screen, color, (x, y, card_w, card_h), 2, border_radius=10)
+                
+                for j, ab in enumerate(fighter.abilities):
+                    # Ability Name : Damage
+                    name_s = font_small.render(ab.name[:12], True, color)
+                    dmg_s = font_small.render(f"{int(ab.damage)} DMG", True, WHITE)
+                    screen.blit(name_s, (x + 10, y + 10 + j*20))
+                    screen.blit(dmg_s, (x + card_w - dmg_s.get_width() - 10, y + 10 + j*20))
+
+            draw_flashcard(list_a[0], 25, BLUE)
+            draw_flashcard(list_b[0], WIDTH - 245, RED)
 
 # ─── MENU SYSTEM ──────────────────────────────────────────────────────────────
 class Menu:
