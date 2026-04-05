@@ -4133,16 +4133,24 @@ class Battle:
             # Team Battle
             alive_a = [f for f in alive_fighters if f.team == 0]
             alive_b = [f for f in alive_fighters if f.team == 1]
-            if not alive_a:
+            
+            # Check for double-KO (Draw)
+            if not alive_a and not alive_b:
                 self.over = True
                 self.shake = 0.0
-                self.winner_team = 1
+                self.winner_team = -1 # DRAW
+                self.over_timer = 3.0
+                self.particles.emit(WIDTH//2, HEIGHT//2, SILVER, count=60, speed=300, size=8, life=2.0)
+            elif not alive_a:
+                self.over = True
+                self.shake = 0.0
+                self.winner_team = 1 # Team Red Wins
                 self.over_timer = 3.0
                 self.particles.emit(WIDTH//2, HEIGHT//2, GOLD, count=60, speed=300, size=8, life=2.0)
             elif not alive_b:
                 self.over = True
                 self.shake = 0.0
-                self.winner_team = 0
+                self.winner_team = 0 # Team Blue Wins
                 self.over_timer = 3.0
                 self.particles.emit(WIDTH//2, HEIGHT//2, GOLD, count=60, speed=300, size=8, life=2.0)
 
@@ -4329,7 +4337,7 @@ class Battle:
         # Draw Sudden Death Warning
         if self.sd_active:
             sd_txt = font_big.render("SUDDEN DEATH!!", True, RED)
-            screen.blit(sd_txt, (WIDTH//2 - sd_txt.get_width()//2, 150))
+            screen.blit(sd_txt, (WIDTH//2 - sd_txt.get_width()//2, 70))  # Moved up from 150 to 70
             # Intense screen flash on SD start
             if self.elapsed < self.sd_start + 0.3:
                 flash = pygame.Surface((WIDTH, HEIGHT))
@@ -4380,7 +4388,10 @@ class Battle:
                 screen.blit(ret_txt, (WIDTH//2 - ret_txt.get_width()//2, panel.bottom + 20))
                 return  # skip normal win screen
 
-            if self.is_br:
+            if self.winner_team == -1:
+                msg = "🏆 DRAW! 🏆"
+                color = SILVER
+            elif self.is_br:
                 winner_name = "NONE"
                 color = GOLD
                 for f in self.fighters:
@@ -4394,27 +4405,31 @@ class Battle:
                 msg = f"🏆 {team_name} WINS!"
 
             # ── MATCH PERFORMANCE & MVP ──
-            # Determine MVP (Kills * 200 + Damage)
-            mvp = max(self.fighters, key=lambda f: f.kills * 200 + f.damage_dealt)
+            # Prioritize winning team for MVP
+            winner_pool = [f for f in self.fighters if f.team == self.winner_team] if self.winner_team != -1 else self.fighters
+            # If winning team was decided but everyone died (rare), fallback to all
+            if not winner_pool: winner_pool = self.fighters
             
-            # Winner Banner
+            mvp = max(winner_pool, key=lambda f: f.kills * 200 + f.damage_dealt)
+            
+            # Winner Banner (Higher Y to avoid SD overlap)
             win_surf = font_big.render(msg, True, color)
-            screen.blit(win_surf, (WIDTH//2 - win_surf.get_width()//2, 160))
+            screen.blit(win_surf, (WIDTH//2 - win_surf.get_width()//2, 120))  # Moved from 160 to 120
 
             # MVP Spotlight
             mvp_txt = font.render(f"🏅 MATCH MVP: {mvp.name}", True, GOLD)
-            screen.blit(mvp_txt, (WIDTH//2 - mvp_txt.get_width()//2, 240))
+            screen.blit(mvp_txt, (WIDTH//2 - mvp_txt.get_width()//2, 200)) # Moved from 240 to 200
             
             # Stats Display
-            stats_box = pygame.Rect(WIDTH//2 - 230, 290, 460, 220)
+            stats_box = pygame.Rect(WIDTH//2 - 230, 250, 460, 220) # Moved from 290 to 250
             pygame.draw.rect(screen, (20, 20, 40, 220), stats_box, border_radius=15)
             pygame.draw.rect(screen, color, stats_box, 3, border_radius=15)
             
-            # Top Performers
+            # Record Holders (Overall best, but MVP is guaranteed winner)
             best_damage = max(self.fighters, key=lambda f: f.damage_dealt)
             best_traits = max(self.fighters, key=lambda f: f.traits_activated_count)
             
-            y_off = 315
+            y_off = 275
             stats_data = [
                 ("➤ Most Kills:", mvp.name, f"({mvp.kills})", mvp.color),
                 ("➤ Max Damage:", best_damage.name, f"({int(best_damage.damage_dealt)})", best_damage.color),
