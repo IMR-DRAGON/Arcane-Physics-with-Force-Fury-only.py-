@@ -4283,6 +4283,28 @@ class Battle:
             for y in range(int(r.top), int(r.bottom)+1, 120):
                 pygame.draw.line(canvas, (30, 35, 45), (r.left + self.shake_off()[0], y + self.shake_off()[1]), (r.right + self.shake_off()[0], y + self.shake_off()[1]))
             pygame.draw.rect(canvas, (50, 60, 80), (r.left + self.shake_off()[0], r.top + self.shake_off()[1], r.width, r.height), 2)
+            
+        # ── 1V1 VS HEADER ──
+        if len(self.fighters) == 2 and not self.is_br:
+            f1, f2 = self.fighters[0], self.fighters[1]
+            # Use 'font' (28pt) instead of 'font_small' (18pt) for bigger names
+            # Draw names in their respective colors with a bold effect
+            n1_surf = font.render(f1.name.upper(), True, f1.color)
+            vs_surf = font.render(" VS ", True, SILVER)
+            n2_surf = font.render(f2.name.upper(), True, f2.color)
+            
+            total_w = n1_surf.get_width() + vs_surf.get_width() + n2_surf.get_width()
+            so = self.shake_off()
+            if self.arena_type == "OCTAGON":
+                tx, ty = WIDTH//2 - total_w//2, HEIGHT//2 - 350
+            else:
+                tx, ty = self.arena_rect.centerx - total_w//2, self.arena_rect.top - 38
+            
+            # Simple Bold effect (draw twice with 1px offset)
+            for ox, oy in [(0,0), (1,0)]:
+                canvas.blit(n1_surf, (tx + so[0] + ox, ty + so[1] + oy))
+                canvas.blit(vs_surf, (tx + n1_surf.get_width() + so[0] + ox, ty + so[1] + oy))
+                canvas.blit(n2_surf, (tx + n1_surf.get_width() + vs_surf.get_width() + so[0] + ox, ty + so[1] + oy))
 
         # Draw World Objects
         for pu in getattr(self, 'powerups', []): pu.draw(canvas, font_small)
