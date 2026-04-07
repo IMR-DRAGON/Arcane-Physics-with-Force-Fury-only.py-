@@ -1,0 +1,82 @@
+[
+  {
+    "line": 729,
+    "text": "Ability(\"Hail Storm\",   3.0,  80, 500.0, WHITE,  \"Raining ice chunks\"),"
+  },
+  {
+    "line": 855,
+    "text": "Ability(\"Cosmic Dash\",  2.5,  65, 350.0, CYAN,   \"High-speed tackle\"),"
+  },
+  {
+    "line": 856,
+    "text": "Ability(\"Energy Shield\",6.0,  0, 100.0, WHITE,  \"Temporary invincibility\"),"
+  },
+  {
+    "line": 1090,
+    "text": "Ability(\"Phase Blink\",   0.6,  25, 400, PURPLE, \"Teleports behind enemy and strikes\"),"
+  },
+  {
+    "line": 1109,
+    "text": "Ability(\"Time Bolt\",     0.8,  35, 500, GOLD,   \"Temporal projectile\"),"
+  },
+  {
+    "line": 1149,
+    "text": "Ability(\"Clone Army\",   6.0,  80, 300, SILVER, \"3 mirror clones distract enemy\"),"
+  },
+  {
+    "line": 1376,
+    "text": "Ability(\"Deploy Turret\", 3.5,  65, 500, SILVER,  \"Plants auto-firing gun on stage\"),"
+  },
+  {
+    "line": 1385,
+    "text": "\"\ud83c\udfd7\ufe0f Architect\": {"
+  },
+  {
+    "line": 1414,
+    "text": "Ability(\"Spawn Clone\",   4.0,  55, 300, TEAL,    \"Creates a fighting clone\"),"
+  },
+  {
+    "line": 1416,
+    "text": "Ability(\"Clone Army\",   13.0, 205, 400, WHITE,   \"Spawns 4 clones at once\"),"
+  },
+  {
+    "line": 2596,
+    "text": "elif name == \"Hail Storm\":"
+  },
+  {
+    "line": 2761,
+    "text": "elif name == \"Cosmic Dash\":"
+  },
+  {
+    "line": 2765,
+    "text": "elif name == \"Energy Shield\":"
+  },
+  {
+    "line": 3012,
+    "text": "elif name == \"Phase Blink\":"
+  },
+  {
+    "line": 3044,
+    "text": "elif name == \"Time Bolt\":"
+  },
+  {
+    "line": 3113,
+    "text": "elif name == \"Clone Army\":"
+  },
+  {
+    "line": 3436,
+    "text": "elif name == \"Deploy Turret\":"
+  },
+  {
+    "line": 3539,
+    "text": "elif name == \"Spawn Clone\":"
+  },
+  {
+    "line": 3569,
+    "text": "elif name == \"Clone Army\":"
+  },
+  {
+    "line": 4316,
+    "text": "# \u2500\u2500 Draw Architect Temp Walls \u2500\u2500"
+  }
+]
