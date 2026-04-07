@@ -107,6 +107,24 @@ class SoundManager:
         stereo = np.column_stack((buf, buf))
         self.sounds['heal'] = pygame.sndarray.make_sound(stereo)
 
+    def _gen_pokemon_bgm(self):
+        sr = 44100
+        dur = 3.2
+        t = np.linspace(0, dur, int(sr*dur))
+        freqs = [[261.63, 329.63, 392.00], [349.23, 440.00, 523.25]]
+        mixed = np.zeros_like(t)
+        seg = len(t) // len(freqs)
+        for i, chord in enumerate(freqs):
+            tt = t[i*seg : min((i+1)*seg, len(t))]
+            env = np.sin(np.pi * (tt - tt[0]) / ((len(tt)/sr) + 1e-6))
+            for f in chord:
+                snd = np.sin(2 * np.pi * f * tt) * 0.5 + np.sin(2 * np.pi * f * 2 * tt) * 0.1
+                mixed[i*seg : min((i+1)*seg, len(t))] += snd * env
+        mixed = mixed / (np.max(np.abs(mixed)) + 1e-6) * 0.05
+        buf = (mixed * 32767).astype(np.int16)
+        stereo = np.column_stack((buf, buf))
+        self.sounds['bgm_pokemon'] = pygame.sndarray.make_sound(stereo)
+
     def _build_sounds(self):
         self._gen_hit()
         self._gen_shoot()
@@ -114,10 +132,21 @@ class SoundManager:
         self._gen_thud()
         self._gen_jump()
         self._gen_heal()
+        self._gen_pokemon_bgm()
 
     def play(self, name):
         if name in self.sounds:
             self.sounds[name].play()
+            
+    def play_bgm(self, name):
+        if getattr(self, "bgm_channel", None) is None:
+            self.bgm_channel = pygame.mixer.Channel(7)
+        if name in self.sounds:
+            self.bgm_channel.play(self.sounds[name], loops=-1, fade_ms=1000)
+            
+    def stop_bgm(self):
+        if getattr(self, "bgm_channel", None) is not None:
+            self.bgm_channel.fadeout(1000)
 
 # Colors
 BLACK       = (0,   0,   0)
@@ -197,12 +226,12 @@ MOVE_TYPE_MAP = {
 }
 
 POKEMON_SPRITE_INDEX = {
-    "🍃 Venusaur": {"dex": 3, "folders": [("generation-1", "yellow")]},
-    "🔥 Charizard": {"dex": 6, "folders": [("generation-1", "yellow")]},
-    "💧 Blastoise": {"dex": 9, "folders": [("generation-1", "yellow")]},
-    "🌸 Meganium": {"dex": 154, "folders": [("generation-2", "crystal")]},
-    "🔥 Typhlosion": {"dex": 157, "folders": [("generation-2", "crystal")]},
-    "💧 Feraligatr": {"dex": 160, "folders": [("generation-2", "crystal")]},
+    "🍃 Venusaur": {"dex": 3, "folders": [("generation-5", "black-white"), ("generation-3", "emerald"), ("generation-1", "yellow")]},
+    "🔥 Charizard": {"dex": 6, "folders": [("generation-5", "black-white"), ("generation-3", "emerald"), ("generation-1", "yellow")]},
+    "💧 Blastoise": {"dex": 9, "folders": [("generation-5", "black-white"), ("generation-3", "emerald"), ("generation-1", "yellow")]},
+    "🌸 Meganium": {"dex": 154, "folders": [("generation-5", "black-white"), ("generation-3", "emerald"), ("generation-2", "crystal")]},
+    "🔥 Typhlosion": {"dex": 157, "folders": [("generation-5", "black-white"), ("generation-3", "emerald"), ("generation-2", "crystal")]},
+    "💧 Feraligatr": {"dex": 160, "folders": [("generation-5", "black-white"), ("generation-3", "emerald"), ("generation-2", "crystal")]},
     "🍃 Sceptile": {"dex": 254, "folders": [("generation-3", "emerald")]},
     "🔥 Blaziken": {"dex": 257, "folders": [("generation-3", "emerald")]},
     "💧 Swampert": {"dex": 260, "folders": [("generation-3", "emerald")]},
@@ -2752,24 +2781,24 @@ class Fighter:
 
     def _handle_legendary_move(self, name, ab, target, projectiles, ndx, ndy, dist):
         attack_angle = math.atan2(ndy, ndx)
-        if name in {"Roost", "Recover", "Moonlight"}:
-            heal_frac = 0.26 if name == "Roost" else 0.34 if name == "Recover" else 0.3
+        if name in {"Roost", "Recover", "Moonlight", "Jungle Healing"}:
+            heal_frac = 0.26 if name == "Roost" else 0.34 if name in {"Recover", "Jungle Healing"} else 0.3
             self.heal(self.max_hp * heal_frac)
             self.invincible_timer = max(self.invincible_timer, 0.55)
             self.particles.emit_ring(self.x, self.y, ab.color, count=24, speed=120, size=6, life=0.6)
             return True
 
-        if name in {"Calm Mind", "Cosmic Power", "Geomancy", "Iron Defense"}:
-            self.damage_mult += 0.18 if name != "Geomancy" else 0.28
+        if name in {"Calm Mind", "Cosmic Power", "Geomancy", "Iron Defense", "Tail Glow"}:
+            self.damage_mult += 0.18 if name not in {"Geomancy", "Tail Glow"} else 0.28
             self.invincible_timer = max(self.invincible_timer, 0.35 if name != "Iron Defense" else 0.6)
             self.heal(self.max_hp * (0.08 if name != "Geomancy" else 0.14))
             self.particles.emit_ring(self.x, self.y, ab.color, count=28, speed=110, size=7, life=0.8)
             return True
 
-        if name in {"Blizzard", "Heat Wave", "Fiery Wrath", "Astral Barrage", "Hurricane"}:
+        if name in {"Blizzard", "Heat Wave", "Fiery Wrath", "Astral Barrage", "Hurricane", "Dark Void", "Diamond Storm", "Hyperspace Hole", "Hyperspace Fury", "Steam Eruption", "Seed Flare", "Judgment", "Searing Shot"}:
             self.particles.emit_ring(target.x, target.y, ab.color, count=32, speed=180, size=6, life=0.7)
             if hasattr(self, "battle_ref"):
-                effect_type = "cloud" if name in {"Blizzard", "Fiery Wrath", "Astral Barrage"} else "field"
+                effect_type = "cloud" if name in {"Blizzard", "Fiery Wrath", "Astral Barrage", "Dark Void", "Steam Eruption"} else "field"
                 secondary = WHITE if name == "Blizzard" else RED
                 if name == "Fiery Wrath":
                     secondary = PURPLE
@@ -2802,7 +2831,7 @@ class Fighter:
                     target.stun_timer = max(target.stun_timer, 0.35)
             return True
 
-        if name in {"Thunder", "Psystrike", "Aura Sphere", "Aeroblast", "Ancient Power", "Moonblast", "Blue Flare", "Photon Geyser", "Dynamax Cannon", "Dazzling Gleam", "Mystical Fire", "Oblivion Wing", "Thunder Cage"}:
+        if name in {"Thunder", "Psystrike", "Aura Sphere", "Aeroblast", "Ancient Power", "Moonblast", "Blue Flare", "Photon Geyser", "Dynamax Cannon", "Dazzling Gleam", "Mystical Fire", "Oblivion Wing", "Thunder Cage", "Psycho Boost", "Water Pulse", "Relic Song", "Techno Blast", "Fleur Cannon", "Focus Blast", "Dark Pulse", "Ice Beam", "Surf"}:
             if name == "Thunder":
                 self.particles.emit_beam(target.x, target.y - 180, target.x, target.y, ab.color, count=22, size=4, life=0.28)
                 if dist < ab.range:
@@ -2886,7 +2915,7 @@ class Fighter:
                 target.stun_timer = max(target.stun_timer, 0.45)
             return True
 
-        if name in {"Dragon Ascent", "Sacred Sword", "Shadow Force", "Sunsteel Strike", "Thunderous Kick", "Play Rough", "Behemoth Blade", "Behemoth Bash", "Wicked Blow", "Glacial Lance", "Horn Leech", "Iron Head"}:
+        if name in {"Dragon Ascent", "Sacred Sword", "Shadow Force", "Sunsteel Strike", "Thunderous Kick", "Play Rough", "Behemoth Blade", "Behemoth Bash", "Wicked Blow", "Glacial Lance", "Horn Leech", "Iron Head", "Secret Sword", "V-create", "Double Iron Bash", "Plasma Fists", "Spectral Thief"}:
             if name == "Behemoth Blade":
                 self.particles.emit_slash(self.x, self.y, attack_angle, WHITE, size=int(self.size * 3.2), count=22)
                 self.particles.emit_slash(self.x, self.y, attack_angle + 0.12, CYAN, size=int(self.size * 3.6), count=18)
@@ -2918,7 +2947,7 @@ class Fighter:
                     self.heal(dealt * 0.45)
             return True
 
-        if name in {"Roar of Time", "Spacial Rend", "Dragon Energy", "Moongeist Beam", "Nature's Madness"}:
+        if name in {"Roar of Time", "Spacial Rend", "Dragon Energy", "Moongeist Beam", "Nature's Madness", "Doom Desire", "Magical Leaf", "Air Slash", "Energy Ball"}:
             if name == "Nature's Madness":
                 self.particles.emit_ring(target.x, target.y, ab.color, count=22, speed=160, size=5, life=0.5)
                 if dist < ab.range:
@@ -6983,11 +7012,13 @@ def main():
                 if event.key == pygame.K_ESCAPE and state == "battle":
                     state = "menu"
                     menu.state = "main"
+                    if battle: battle.sounds.stop_bgm()
                     battle = None
                 if event.key == pygame.K_SPACE and state == "battle":
                     if battle and battle.over:
                         state = "menu"
                         menu.state = "main"
+                        if battle: battle.sounds.stop_bgm()
                         battle = None
 
             if state == "menu":
@@ -7000,6 +7031,16 @@ def main():
                 is_br = (menu.modes[menu.mode_idx] == "Battle Royale")
                 battle = Battle(menu.selected_a, menu.selected_b, is_br=is_br, 
                                arena_type=menu.arenas[menu.arena_idx])
+                               
+                # Start pokemon music for pokemon battles
+                is_pokemon_battle = False
+                for b_name in menu.selected_a + menu.selected_b:
+                    if b_name in STARTER_POKEMON_NAMES or b_name in LEGENDARY_CHARACTER_NAMES:
+                        is_pokemon_battle = True
+                
+                if is_pokemon_battle:
+                    battle.sounds.play_bgm("bgm_pokemon")
+
                 state = "battle"
                 menu.state = "main"
         elif state == "battle" and battle:
