@@ -4,10 +4,18 @@ import pymunk.pygame_util
 import math
 import random
 import sys
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from enum import Enum
 import numpy as np
+from pokemon_legendaries import (
+    LEGENDARY_COUNTER_MOVES,
+    LEGENDARY_MOVE_TYPES,
+    LEGENDARY_POKEMON_DATA,
+    LEGENDARY_SPRITES,
+    LEGENDARY_TYPE_EFFECTIVENESS,
+)
 
 # ─── CONSTANTS ───────────────────────────────────────────────────────────────
 WIDTH, HEIGHT = 540, 960
@@ -131,6 +139,83 @@ TEAL        = (0,   200, 180)
 CRIMSON     = (180, 0,   40)
 SILVER      = (180, 190, 200)
 BROWN       = (140, 90,  40)
+
+TYPE_EFFECTIVENESS = {
+    "grass": {"water": 2.0, "ground": 2.0, "rock": 2.0, "fire": 0.5, "grass": 0.5, "poison": 0.5, "flying": 0.5, "dragon": 0.5, "steel": 0.5},
+    "fire": {"grass": 2.0, "ice": 2.0, "bug": 2.0, "steel": 2.0, "fire": 0.5, "water": 0.5, "rock": 0.5, "dragon": 0.5},
+    "water": {"fire": 2.0, "ground": 2.0, "rock": 2.0, "water": 0.5, "grass": 0.5, "dragon": 0.5},
+    "poison": {"grass": 2.0, "fairy": 2.0, "poison": 0.5, "ground": 0.5, "rock": 0.5, "ghost": 0.5, "steel": 0.0},
+    "ground": {"fire": 2.0, "electric": 2.0, "poison": 2.0, "rock": 2.0, "steel": 2.0, "grass": 0.5, "bug": 0.5, "flying": 0.0},
+    "flying": {"grass": 2.0, "fighting": 2.0, "bug": 2.0, "electric": 0.5, "rock": 0.5, "steel": 0.5},
+    "ice": {"grass": 2.0, "ground": 2.0, "flying": 2.0, "dragon": 2.0, "fire": 0.5, "water": 0.5, "ice": 0.5, "steel": 0.5},
+    "dark": {"psychic": 2.0, "ghost": 2.0, "fighting": 0.5, "dark": 0.5, "fairy": 0.5},
+    "dragon": {"dragon": 2.0, "steel": 0.5, "fairy": 0.0},
+    "fighting": {"normal": 2.0, "rock": 2.0, "steel": 2.0, "ice": 2.0, "dark": 2.0, "poison": 0.5, "flying": 0.5, "psychic": 0.5, "bug": 0.5, "fairy": 0.5, "ghost": 0.0},
+    "steel": {"ice": 2.0, "rock": 2.0, "fairy": 2.0, "fire": 0.5, "water": 0.5, "electric": 0.5, "steel": 0.5},
+    "psychic": {"fighting": 2.0, "poison": 2.0, "psychic": 0.5, "steel": 0.5, "dark": 0.0},
+}
+
+MOVE_TYPE_MAP = {
+    "Solar Beam": "grass",
+    "Sludge Bomb": "poison",
+    "Energy Ball": "grass",
+    "Earthquake": "ground",
+    "Flamethrower": "fire",
+    "Fire Blast": "fire",
+    "Air Slash": "flying",
+    "Dragon Claw": "dragon",
+    "Hydro Pump": "water",
+    "Surf": "water",
+    "Ice Beam": "ice",
+    "Dark Pulse": "dark",
+    "Giga Drain": "grass",
+    "Body Slam": "normal",
+    "Eruption": "fire",
+    "Focus Blast": "fighting",
+    "Waterfall": "water",
+    "Ice Punch": "ice",
+    "Crunch": "dark",
+    "Leaf Blade": "grass",
+    "Dragon Pulse": "dragon",
+    "Flare Blitz": "fire",
+    "Blaze Kick": "fire",
+    "High Jump Kick": "fighting",
+    "Brave Bird": "flying",
+    "Wood Hammer": "grass",
+    "Stone Edge": "rock",
+    "Close Combat": "fighting",
+    "Mach Punch": "fighting",
+    "Flash Cannon": "steel",
+    "Leaf Storm": "grass",
+    "Heat Crash": "fire",
+    "Hammer Arm": "fighting",
+    "Wild Charge": "electric",
+    "Megahorn": "bug",
+    "Drain Punch": "fighting",
+    "Psychic": "psychic",
+    "Shadow Ball": "ghost",
+}
+
+POKEMON_SPRITE_INDEX = {
+    "🍃 Venusaur": {"dex": 3, "folders": [("generation-1", "yellow")]},
+    "🔥 Charizard": {"dex": 6, "folders": [("generation-1", "yellow")]},
+    "💧 Blastoise": {"dex": 9, "folders": [("generation-1", "yellow")]},
+    "🌸 Meganium": {"dex": 154, "folders": [("generation-2", "crystal")]},
+    "🔥 Typhlosion": {"dex": 157, "folders": [("generation-2", "crystal")]},
+    "💧 Feraligatr": {"dex": 160, "folders": [("generation-2", "crystal")]},
+    "🍃 Sceptile": {"dex": 254, "folders": [("generation-3", "emerald")]},
+    "🔥 Blaziken": {"dex": 257, "folders": [("generation-3", "emerald")]},
+    "💧 Swampert": {"dex": 260, "folders": [("generation-3", "emerald")]},
+    "🍃 Torterra": {"dex": 389, "folders": [("generation-4", "platinum")]},
+    "🔥 Infernape": {"dex": 392, "folders": [("generation-4", "platinum")]},
+    "💧 Empoleon": {"dex": 395, "folders": [("generation-4", "platinum")]},
+    "🍃 Serperior": {"dex": 497, "folders": [("generation-5", "black-white")]},
+    "🔥 Emboar": {"dex": 500, "folders": [("generation-5", "black-white")]},
+    "💧 Samurott": {"dex": 503, "folders": [("generation-5", "black-white")]},
+    "🍃 Chesnaught": {"dex": 652, "folders": [("gen6", "gen6")]},
+    "🔥 Delphox": {"dex": 655, "folders": [("gen6", "gen6")]},
+    "💧 Greninja": {"dex": 658, "folders": [("gen6", "gen6")]},
+}
 
 # ─── PARTICLE SYSTEM ─────────────────────────────────────────────────────────
 class Particle:
@@ -336,6 +421,257 @@ class Projectile:
         pygame.draw.circle(glow_surf, (*self.color, 60),
                           (self.size*2, self.size*2), self.size*2)
         screen.blit(glow_surf, (int(self.x)-self.size*2, int(self.y)-self.size*2))
+
+
+class BattlefieldEffect:
+    def __init__(self, effect_type, x, y, color, life, **kwargs):
+        self.type = effect_type
+        self.x = float(x)
+        self.y = float(y)
+        self.color = color
+        self.life = float(life)
+        self.max_life = float(life)
+        self.radius = kwargs.get("radius", 40.0)
+        self.owner_team = kwargs.get("owner_team", -1)
+        self.damage = kwargs.get("damage", 0.0)
+        self.interval = kwargs.get("interval", 0.7)
+        self.timer = kwargs.get("timer", self.interval)
+        self.secondary = kwargs.get("secondary", WHITE)
+        self.angle = kwargs.get("angle", 0.0)
+        self.length = kwargs.get("length", 80.0)
+        self.shape = kwargs.get("shape")
+        self.meta = dict(kwargs)
+
+    def update(self, dt, battle, fighters, projectiles):
+        self.life -= dt
+        self.angle += dt * self.meta.get("spin", 2.4)
+        if self.life <= 0:
+            if self.shape is not None and self.shape in battle.space.shapes:
+                battle.space.remove(self.shape)
+            return False
+
+        self.timer -= dt
+        enemy_candidates = [f for f in fighters if f.alive and f.team != self.owner_team]
+
+        if self.type in {"cloud", "field", "vortex", "cage", "swarm", "mine", "ritual", "quake"} and self.timer <= 0:
+            self.timer = self.interval
+            for f in enemy_candidates:
+                dist = math.hypot(f.x - self.x, f.y - self.y)
+                if dist <= self.radius:
+                    if self.type == "cloud":
+                        f.apply_dot(max(8, self.damage * 0.25), 1.5)
+                        f.take_damage(self.damage * 0.18, attacker=None)
+                    elif self.type == "field":
+                        f.take_damage(self.damage * 0.22, attacker=None)
+                        f.stun_timer = max(f.stun_timer, 0.35)
+                    elif self.type == "vortex":
+                        pull = max(60, self.radius - dist)
+                        dx = self.x - f.x
+                        dy = self.y - f.y
+                        d = max(1, math.hypot(dx, dy))
+                        f.body.velocity = (f.body.velocity.x + dx / d * pull * 2.0, f.body.velocity.y + dy / d * pull * 2.0)
+                        f.take_damage(self.damage * 0.15, attacker=None)
+                    elif self.type == "cage":
+                        f.take_damage(self.damage * 0.20, attacker=None)
+                        f.stun_timer = max(f.stun_timer, 0.6)
+                    elif self.type == "mine":
+                        battle.particles.emit_ring(self.x, self.y, self.color, count=18, speed=160, size=6)
+                        for ff in enemy_candidates:
+                            d2 = math.hypot(ff.x - self.x, ff.y - self.y)
+                            if d2 <= self.radius * 1.35:
+                                kb = max(0.2, 1 - d2 / max(1, self.radius * 1.35))
+                                ff.take_damage(self.damage, knockback_x=(ff.x - self.x) * kb * 4, knockback_y=-220 * kb, attacker=None)
+                        self.life = min(self.life, 0.05)
+                        break
+                    elif self.type == "swarm":
+                        f.take_damage(self.damage * 0.16, attacker=None)
+                        f.apply_dot(max(6, self.damage * 0.18), 1.8)
+                    elif self.type == "ritual":
+                        f.take_damage(self.damage * 0.24, attacker=None)
+                        f.apply_dot(max(8, self.damage * 0.12), 2.2)
+                    elif self.type == "quake":
+                        falloff = max(0.2, 1.0 - dist / max(1, self.radius))
+                        f.take_damage(self.damage * (0.18 + 0.22 * falloff), knockback_x=(f.x - self.x) * 2.2, knockback_y=-180, attacker=None)
+                        f.stun_timer = max(f.stun_timer, 0.22 + 0.18 * falloff)
+                        f.body.velocity = (f.body.velocity.x * 0.18, f.body.velocity.y * 0.12)
+
+        if self.type == "turret" and self.timer <= 0:
+            self.timer = self.interval
+            if enemy_candidates:
+                target = min(enemy_candidates, key=lambda f: math.hypot(f.x - self.x, f.y - self.y))
+                dx = target.x - self.x
+                dy = target.y - self.y
+                d = max(1, math.hypot(dx, dy))
+                spread = random.uniform(-0.12, 0.12)
+                angle = math.atan2(dy, dx) + spread
+                proj = Projectile(
+                    self.x,
+                    self.y,
+                    math.cos(angle) * 720,
+                    math.sin(angle) * 720,
+                    max(8, self.damage * 0.35),
+                    self.color,
+                    5,
+                    self.owner_team,
+                    self.secondary,
+                )
+                projectiles.append(proj)
+                battle.particles.emit(self.x, self.y, self.secondary, count=6, speed=120, spread=0.3, gravity=False, direction=angle)
+
+        if self.type == "clone" and self.timer <= 0:
+            self.timer = self.interval
+            if enemy_candidates:
+                target = min(enemy_candidates, key=lambda f: math.hypot(f.x - self.x, f.y - self.y))
+                angle = math.atan2(target.y - self.y, target.x - self.x)
+                proj = Projectile(
+                    self.x,
+                    self.y,
+                    math.cos(angle) * 420,
+                    math.sin(angle) * 420,
+                    max(8, self.damage * 0.30),
+                    self.color,
+                    7,
+                    self.owner_team,
+                    self.secondary,
+                    homing=True,
+                )
+                projectiles.append(proj)
+                battle.particles.emit_ring(self.x, self.y, self.color, count=8, speed=70, size=4)
+
+        if self.type == "mothership":
+            self.x += math.sin(self.angle * 0.35) * 22 * dt
+            if self.timer <= 0:
+                self.timer = self.interval
+                for _ in range(3):
+                    tx = self.meta["target_x"] + random.uniform(-150, 150)
+                    proj = Projectile(tx, self.y + 25, 0, 620, max(10, self.damage * 0.22), self.secondary, 9, self.owner_team, self.color, aoe_radius=40)
+                    projectiles.append(proj)
+        return True
+
+    def draw(self, screen, battle):
+        alpha = max(0.0, self.life / self.max_life)
+        x = self.x + battle.shake_off()[0]
+        y = self.y + battle.shake_off()[1]
+
+        if self.type == "wall":
+            if self.shape is not None:
+                p1 = (self.shape.a.x + battle.shake_off()[0], self.shape.a.y + battle.shake_off()[1])
+                p2 = (self.shape.b.x + battle.shake_off()[0], self.shape.b.y + battle.shake_off()[1])
+            else:
+                dx = math.cos(self.angle) * self.length
+                dy = math.sin(self.angle) * self.length
+                p1 = (x - dx, y - dy)
+                p2 = (x + dx, y + dy)
+            pygame.draw.line(screen, self.color, p1, p2, 12)
+            pygame.draw.line(screen, self.secondary, p1, p2, 4)
+            return
+
+        if self.type == "turret":
+            pygame.draw.circle(screen, self.color, (int(x), int(y)), 18)
+            pygame.draw.circle(screen, self.secondary, (int(x), int(y)), 12, 3)
+            barrel_x = x + math.cos(self.angle) * 22
+            barrel_y = y + math.sin(self.angle) * 22
+            pygame.draw.line(screen, self.secondary, (x, y), (barrel_x, barrel_y), 6)
+            pygame.draw.circle(screen, (255, 180, 80), (int(barrel_x), int(barrel_y)), 4)
+            return
+
+        if self.type == "clone":
+            ghost = pygame.Surface((80, 80), pygame.SRCALPHA)
+            body = (*self.color, int(90 * alpha))
+            accent = (*self.secondary, int(120 * alpha))
+            pygame.draw.ellipse(ghost, body, (20, 18, 40, 46))
+            pygame.draw.ellipse(ghost, accent, (18, 16, 44, 50), 2)
+            pygame.draw.circle(ghost, accent, (48, 32), 4)
+            screen.blit(ghost, (x - 40, y - 40))
+            return
+
+        if self.type == "quake":
+            crack_count = 6
+            for i in range(crack_count):
+                ang = (math.pi * 2 / crack_count) * i + math.sin(self.angle + i) * 0.15
+                length = self.radius * (0.35 + 0.45 * ((i % 3) + 1) / 3)
+                end_x = x + math.cos(ang) * length
+                end_y = y + math.sin(ang) * length * 0.45
+                mid_x = x + math.cos(ang) * length * 0.55 + math.sin(self.angle * 3 + i) * 12
+                mid_y = y + math.sin(ang) * length * 0.25 + math.cos(self.angle * 2 + i) * 8
+                pygame.draw.line(screen, self.color, (x, y + 8), (mid_x, mid_y), 4)
+                pygame.draw.line(screen, self.secondary, (mid_x, mid_y), (end_x, end_y), 2)
+            ring_rect = pygame.Rect(x - self.radius, y - self.radius * 0.45, self.radius * 2, self.radius * 0.9)
+            pygame.draw.ellipse(screen, (*self.secondary, int(70 * alpha)), ring_rect, 2)
+            return
+
+        if self.type in {"cloud", "ritual"}:
+            surf = pygame.Surface((int(self.radius * 2.8), int(self.radius * 2.8)), pygame.SRCALPHA)
+            center = surf.get_width() // 2
+            for i in range(4):
+                rad = int(self.radius * (0.55 + i * 0.18))
+                pygame.draw.circle(surf, (*self.color, int((40 - i * 6) * alpha)), (center, center), rad)
+            if self.type == "ritual":
+                pts = []
+                for i in range(6):
+                    ang = self.angle + i * math.pi / 3
+                    pts.append((center + math.cos(ang) * self.radius * 0.9, center + math.sin(ang) * self.radius * 0.9))
+                pygame.draw.polygon(surf, (*self.secondary, int(110 * alpha)), pts, 2)
+            screen.blit(surf, (x - center, y - center))
+            return
+
+        if self.type == "field":
+            surf = pygame.Surface((int(self.radius * 3), int(self.radius * 3)), pygame.SRCALPHA)
+            center = surf.get_width() // 2
+            pygame.draw.circle(surf, (*self.color, int(35 * alpha)), (center, center), int(self.radius))
+            pygame.draw.circle(surf, (*self.secondary, int(120 * alpha)), (center, center), int(self.radius), 3)
+            for i in range(3):
+                ang = self.angle * 1.6 + i * math.pi * 2 / 3
+                px = center + math.cos(ang) * self.radius * 0.7
+                py = center + math.sin(ang) * self.radius * 0.7
+                pygame.draw.circle(surf, (*self.secondary, int(150 * alpha)), (int(px), int(py)), 4)
+            screen.blit(surf, (x - center, y - center))
+            return
+
+        if self.type == "vortex":
+            for i in range(3):
+                rad = self.radius * (0.45 + i * 0.28)
+                rect = pygame.Rect(0, 0, rad * 2, rad * 1.2)
+                rect.center = (x, y)
+                start = self.angle + i * 0.6
+                pygame.draw.arc(screen, self.color if i % 2 == 0 else self.secondary, rect, start, start + math.pi * 1.3, 3)
+            pygame.draw.circle(screen, self.secondary, (int(x), int(y)), max(4, int(self.radius * 0.12)))
+            return
+
+        if self.type == "cage":
+            for i in range(6):
+                ang = self.angle + i * math.pi / 3
+                ex = x + math.cos(ang) * self.radius
+                ey = y + math.sin(ang) * self.radius
+                pygame.draw.line(screen, self.color, (x, y), (ex, ey), 2)
+                pygame.draw.circle(screen, self.secondary, (int(ex), int(ey)), 6, 2)
+            pygame.draw.circle(screen, self.secondary, (int(x), int(y)), int(self.radius), 2)
+            return
+
+        if self.type == "swarm":
+            for i in range(10):
+                ang = self.angle * (1.2 + i * 0.07) + i * 0.62
+                rad = self.radius * (0.45 + (i % 3) * 0.18)
+                px = x + math.cos(ang) * rad
+                py = y + math.sin(ang) * rad * 0.75
+                pygame.draw.circle(screen, self.color if i % 2 == 0 else self.secondary, (int(px), int(py)), 4 if i % 2 == 0 else 3)
+            return
+
+        if self.type == "mine":
+            pygame.draw.circle(screen, self.color, (int(x), int(y)), 14)
+            pygame.draw.circle(screen, self.secondary, (int(x), int(y)), 20, 2)
+            for i in range(4):
+                ang = self.angle + i * math.pi / 2
+                pygame.draw.line(screen, self.secondary, (x, y), (x + math.cos(ang) * 22, y + math.sin(ang) * 22), 2)
+            return
+
+        if self.type == "mothership":
+            ship = pygame.Rect(0, 0, 90, 28)
+            ship.center = (x, y)
+            pygame.draw.ellipse(screen, self.color, ship)
+            pygame.draw.ellipse(screen, self.secondary, ship, 3)
+            pygame.draw.circle(screen, (180, 255, 180), (int(x), int(y - 6)), 10)
+            return
 
 # ─── ABILITY DEFINITIONS ─────────────────────────────────────────────────────
 @dataclass
@@ -1420,8 +1756,419 @@ CHARACTER_DATA = {
         "has_shield": False
     },
 
+    "🍃 Venusaur": {
+        "color": (90, 170, 110),
+        "body_color": (55, 120, 75),
+        "hp": 820,
+        "speed": 220,
+        "mass": 3.8,
+        "size": 20,
+        "description": "Kanto grass tank\nBulb cannon, toxic seeds, and seismic stomps",
+        "abilities": [
+            Ability("Solar Beam",   5.0, 120, 650, YELLOW, "Charges and unleashes a piercing solar beam"),
+            Ability("Sludge Bomb",  2.4,  90, 520, PURPLE, "Lobs toxic sludge that bursts into poison"),
+            Ability("Energy Ball",  1.6,  90, 500, GREEN,  "Launches a compact orb of nature energy"),
+            Ability("Earthquake",   4.5, 100, 220, BROWN,  "Shakes the arena with a heavy ground slam"),
+        ],
+        "dodge_rate": 0.10,
+        "weapon_type": "fists",
+        "render_style": "venusaur",
+        "species_group": "pokemon",
+        "element_types": ["grass", "poison"]
+    },
+    "🔥 Charizard": {
+        "color": (235, 125, 50),
+        "body_color": (180, 75, 35),
+        "hp": 760,
+        "speed": 300,
+        "mass": 2.4,
+        "size": 19,
+        "description": "Kanto aerial fire dragon\nSweeping flames, wing slashes, and savage claws",
+        "abilities": [
+            Ability("Flamethrower", 1.0,  90, 420, ORANGE, "Sustained flame stream"),
+            Ability("Fire Blast",   2.4, 110, 520, RED,    "Explosive fire sigil projectile"),
+            Ability("Air Slash",    1.2,  75, 480, WHITE,  "Cuts the air into sharp crescents"),
+            Ability("Dragon Claw",  1.5,  80, 140, CYAN,   "Ferocious draconic claw combo"),
+        ],
+        "dodge_rate": 0.19,
+        "weapon_type": "claws",
+        "render_style": "charizard",
+        "species_group": "pokemon",
+        "element_types": ["fire", "flying"]
+    },
+    "💧 Blastoise": {
+        "color": (75, 145, 220),
+        "body_color": (45, 95, 160),
+        "hp": 860,
+        "speed": 210,
+        "mass": 4.2,
+        "size": 21,
+        "description": "Kanto shell fortress\nHeavy cannons, waves, and icy pressure shots",
+        "abilities": [
+            Ability("Hydro Pump", 1.8, 110, 620, CYAN,  "Twin shell cannons fire a crushing water lance"),
+            Ability("Surf",       2.0,  90, 420, BLUE,  "Summons a surging wall of water"),
+            Ability("Ice Beam",   1.4,  90, 560, WHITE, "Freezing water beam"),
+            Ability("Dark Pulse", 1.5,  80, 480, PURPLE,"Dark shockwave from the shell core"),
+        ],
+        "dodge_rate": 0.10,
+        "weapon_type": "blaster",
+        "render_style": "blastoise",
+        "species_group": "pokemon",
+        "element_types": ["water"]
+    },
+    "🌸 Meganium": {
+        "color": (130, 205, 110),
+        "body_color": (85, 150, 70),
+        "hp": 840,
+        "speed": 215,
+        "mass": 3.6,
+        "size": 20,
+        "description": "Johto guardian herbivore\nRadiant petals with restorative and seismic power",
+        "abilities": [
+            Ability("Giga Drain",  1.3,  75, 420, GREEN,  "Drains life through flowering energy"),
+            Ability("Solar Beam",  5.0, 120, 650, YELLOW, "Charges and fires concentrated sunlight"),
+            Ability("Earthquake",  4.5, 100, 220, BROWN,  "Cracks the field with a body slam"),
+            Ability("Body Slam",   1.6,  85, 150, SILVER, "Leaps forward with crushing weight"),
+        ],
+        "dodge_rate": 0.11,
+        "weapon_type": "fists",
+        "render_style": "meganium",
+        "species_group": "pokemon",
+        "element_types": ["grass"]
+    },
+    "🔥 Typhlosion": {
+        "color": (235, 120, 60),
+        "body_color": (75, 80, 95),
+        "hp": 760,
+        "speed": 300,
+        "mass": 2.3,
+        "size": 19,
+        "description": "Johto volcanic striker\nIgnites collar flames and erupts violently",
+        "abilities": [
+            Ability("Eruption",     7.0, 150, 420, ORANGE, "Unleashes a volcanic blast from full power"),
+            Ability("Flamethrower", 1.0,  90, 420, RED,    "Streams hot fire straight ahead"),
+            Ability("Fire Blast",   2.4, 110, 520, ORANGE, "Detonating fire sigil"),
+            Ability("Focus Blast",  3.0, 120, 460, GOLD,   "Compressed aura sphere that explodes"),
+        ],
+        "dodge_rate": 0.17,
+        "weapon_type": "claws",
+        "render_style": "typhlosion",
+        "species_group": "pokemon",
+        "element_types": ["fire"]
+    },
+    "💧 Feraligatr": {
+        "color": (70, 150, 220),
+        "body_color": (45, 105, 165),
+        "hp": 820,
+        "speed": 225,
+        "mass": 3.7,
+        "size": 20,
+        "description": "Johto river bruiser\nSavage jaws, icy fists, and crushing water rushes",
+        "abilities": [
+            Ability("Waterfall",  1.2,  80, 140, CYAN,   "Bursts upward in a rising water strike"),
+            Ability("Hydro Pump", 1.8, 110, 620, BLUE,   "Fires a heavy water cannon"),
+            Ability("Ice Punch",  1.2,  75, 120, WHITE,  "Freezing melee smash"),
+            Ability("Crunch",     1.1,  80, 120, PURPLE, "Dark bite that crushes defenses"),
+        ],
+        "dodge_rate": 0.13,
+        "weapon_type": "claws",
+        "render_style": "feraligatr",
+        "species_group": "pokemon",
+        "element_types": ["water"]
+    },
+    "🍃 Sceptile": {
+        "color": (80, 200, 95),
+        "body_color": (45, 145, 70),
+        "hp": 720,
+        "speed": 330,
+        "mass": 2.0,
+        "size": 17,
+        "description": "Hoenn leaf duelist\nBlade leaves, forest orbs, and draconic pulses",
+        "abilities": [
+            Ability("Leaf Blade",   1.0,  90, 150, GREEN,  "Twin forearm leaves slash rapidly"),
+            Ability("Energy Ball",  1.5,  90, 500, LIME,   "Fast sphere of natural force"),
+            Ability("Dragon Pulse", 1.7,  85, 520, CYAN,   "Dragon-energy shockwave"),
+            Ability("Focus Blast",  3.0, 120, 460, GOLD,   "Large aura blast"),
+        ],
+        "dodge_rate": 0.24,
+        "weapon_type": "katana",
+        "render_style": "sceptile",
+        "species_group": "pokemon",
+        "element_types": ["grass"]
+    },
+    "🔥 Blaziken": {
+        "color": (235, 90, 60),
+        "body_color": (220, 185, 80),
+        "hp": 780,
+        "speed": 255,
+        "mass": 2.5,
+        "size": 19,
+        "description": "Hoenn martial inferno\nExplosive kicks, diving strikes, and blazing rushes",
+        "abilities": [
+            Ability("Flare Blitz",    2.0, 120, 160, ORANGE, "Ignites itself in a reckless flaming charge"),
+            Ability("Blaze Kick",     1.3,  85, 130, RED,    "Fiery spinning kick"),
+            Ability("High Jump Kick", 2.3, 130, 180, GOLD,   "Leaping martial strike with huge payoff"),
+            Ability("Brave Bird",     2.0, 120, 220, WHITE,  "Diving avian tackle"),
+        ],
+        "dodge_rate": 0.17,
+        "weapon_type": "claws",
+        "render_style": "blaziken",
+        "species_group": "pokemon",
+        "element_types": ["fire", "fighting"]
+    },
+    "💧 Swampert": {
+        "color": (80, 135, 205),
+        "body_color": (225, 120, 70),
+        "hp": 900,
+        "speed": 180,
+        "mass": 4.4,
+        "size": 22,
+        "description": "Hoenn amphibious tank\nMudquake stomps with brutal water-powered impacts",
+        "abilities": [
+            Ability("Earthquake",  4.5, 100, 220, BROWN, "Massive ground shock"),
+            Ability("Waterfall",   1.2,  80, 140, CYAN,  "Rising water smash"),
+            Ability("Hydro Pump",  1.8, 110, 620, BLUE,  "High-pressure flood burst"),
+            Ability("Ice Punch",   1.2,  75, 120, WHITE, "Frozen fist strike"),
+        ],
+        "dodge_rate": 0.08,
+        "weapon_type": "hammer",
+        "render_style": "swampert",
+        "species_group": "pokemon",
+        "element_types": ["water", "ground"]
+    },
+    "🍃 Torterra": {
+        "color": (95, 150, 80),
+        "body_color": (90, 115, 65),
+        "hp": 920,
+        "speed": 170,
+        "mass": 4.8,
+        "size": 23,
+        "description": "Sinnoh living continent\nCarries a forest shell and crushes the ground",
+        "abilities": [
+            Ability("Wood Hammer", 1.8, 120, 150, GREEN,  "Heavy recoil slam with a trunk-like charge"),
+            Ability("Earthquake",  4.5, 100, 220, BROWN,  "Arena-shaking stomp"),
+            Ability("Stone Edge",  2.3, 100, 420, SILVER, "Jagged stone pillars erupt upward"),
+            Ability("Crunch",      1.1,  80, 120, PURPLE, "Dark jaw clamp"),
+        ],
+        "dodge_rate": 0.07,
+        "weapon_type": "hammer",
+        "render_style": "torterra",
+        "species_group": "pokemon",
+        "element_types": ["grass", "ground"]
+    },
+    "🔥 Infernape": {
+        "color": (235, 130, 65),
+        "body_color": (180, 65, 45),
+        "hp": 760,
+        "speed": 320,
+        "mass": 2.2,
+        "size": 18,
+        "description": "Sinnoh acrobatic striker\nRelentless combos, fire arts, and fast interrupts",
+        "abilities": [
+            Ability("Flamethrower", 1.0,  90, 420, ORANGE, "Jets a focused stream of fire"),
+            Ability("Fire Blast",   2.4, 110, 520, RED,    "Explosive flame mark"),
+            Ability("Close Combat", 1.9, 120, 150, GOLD,   "Flurry of martial blows"),
+            Ability("Mach Punch",   0.5,  40, 120, WHITE,  "Instant close-range jab"),
+        ],
+        "dodge_rate": 0.24,
+        "weapon_type": "claws",
+        "render_style": "infernape",
+        "species_group": "pokemon",
+        "element_types": ["fire", "fighting"]
+    },
+    "💧 Empoleon": {
+        "color": (80, 120, 200),
+        "body_color": (40, 70, 130),
+        "hp": 820,
+        "speed": 185,
+        "mass": 3.6,
+        "size": 20,
+        "description": "Sinnoh steel emperor\nCommanding surf, cannons, and icy royal strikes",
+        "abilities": [
+            Ability("Surf",          2.0,  90, 420, BLUE,   "Summons a broad water surge"),
+            Ability("Hydro Pump",    1.8, 110, 620, CYAN,   "Piercing hydro blast"),
+            Ability("Flash Cannon",  1.7,  80, 520, SILVER, "Steel energy cannon"),
+            Ability("Ice Beam",      1.4,  90, 560, WHITE,  "Freezing lance"),
+        ],
+        "dodge_rate": 0.11,
+        "weapon_type": "trident",
+        "render_style": "empoleon",
+        "species_group": "pokemon",
+        "element_types": ["water", "steel"]
+    },
+    "🍃 Serperior": {
+        "color": (90, 205, 110),
+        "body_color": (55, 145, 75),
+        "hp": 720,
+        "speed": 335,
+        "mass": 1.8,
+        "size": 18,
+        "description": "Unova royal serpent\nElegant coils with storms of leaves and draining vines",
+        "abilities": [
+            Ability("Leaf Storm",   2.8, 130, 520, GREEN, "Whips the arena with a leaf cyclone"),
+            Ability("Energy Ball",  1.5,  90, 500, LIME,  "Fast nature orb"),
+            Ability("Dragon Pulse", 1.7,  85, 520, CYAN,  "Serpentine dragon wave"),
+            Ability("Giga Drain",   1.3,  75, 420, GREEN, "Saps vitality with plant energy"),
+        ],
+        "dodge_rate": 0.25,
+        "weapon_type": "staff",
+        "render_style": "serperior",
+        "species_group": "pokemon",
+        "element_types": ["grass"]
+    },
+    "🔥 Emboar": {
+        "color": (210, 85, 55),
+        "body_color": (70, 60, 70),
+        "hp": 900,
+        "speed": 175,
+        "mass": 4.5,
+        "size": 22,
+        "description": "Unova brute-force boar\nMassive crashes, flaming tackles, and electric bursts",
+        "abilities": [
+            Ability("Flare Blitz",  2.0, 120, 160, ORANGE, "Burning body charge"),
+            Ability("Heat Crash",   1.8, 105, 150, RED,    "Overwhelms foes with fiery weight"),
+            Ability("Hammer Arm",   1.6, 100, 140, BROWN,  "Heavy arm smash"),
+            Ability("Wild Charge",  1.8,  90, 170, YELLOW, "Electrified tackle"),
+        ],
+        "dodge_rate": 0.07,
+        "weapon_type": "hammer",
+        "render_style": "emboar",
+        "species_group": "pokemon",
+        "element_types": ["fire", "fighting"]
+    },
+    "💧 Samurott": {
+        "color": (95, 145, 215),
+        "body_color": (50, 85, 150),
+        "hp": 800,
+        "speed": 205,
+        "mass": 3.2,
+        "size": 20,
+        "description": "Unova shell blade warrior\nDraws seamitars with slicing water pressure",
+        "abilities": [
+            Ability("Hydro Pump", 1.8, 110, 620, BLUE,   "High-pressure shell cannon"),
+            Ability("Surf",       2.0,  90, 420, CYAN,   "Summons a cresting water rush"),
+            Ability("Megahorn",   1.8, 120, 150, GOLD,   "Horn-first charge"),
+            Ability("Ice Beam",   1.4,  90, 560, WHITE,  "Freezing lance"),
+        ],
+        "dodge_rate": 0.13,
+        "weapon_type": "katana",
+        "render_style": "samurott",
+        "species_group": "pokemon",
+        "element_types": ["water"]
+    },
+    "🍃 Chesnaught": {
+        "color": (95, 150, 70),
+        "body_color": (115, 80, 55),
+        "hp": 900,
+        "speed": 170,
+        "mass": 4.6,
+        "size": 22,
+        "description": "Kalos armored bruiser\nSpiked shell, crushing punches, and quake slams",
+        "abilities": [
+            Ability("Wood Hammer",  1.8, 120, 150, GREEN,  "Spiked body slam"),
+            Ability("Hammer Arm",   1.6, 100, 140, BROWN,  "Heavy armored punch"),
+            Ability("Drain Punch",  1.4,  75, 130, GOLD,   "Restorative close strike"),
+            Ability("Earthquake",   4.5, 100, 220, BROWN,  "Ground-shaking smash"),
+        ],
+        "dodge_rate": 0.08,
+        "weapon_type": "hammer",
+        "render_style": "chesnaught",
+        "species_group": "pokemon",
+        "element_types": ["grass", "fighting"]
+    },
+    "🔥 Delphox": {
+        "color": (220, 110, 70),
+        "body_color": (145, 60, 45),
+        "hp": 740,
+        "speed": 300,
+        "mass": 2.0,
+        "size": 18,
+        "description": "Kalos mystic fox\nSpellfire caster with wand flourishes and shadow orbs",
+        "abilities": [
+            Ability("Flamethrower", 1.0,  90, 420, ORANGE, "Spellfire stream"),
+            Ability("Fire Blast",   2.4, 110, 520, RED,    "Exploding fire sigil"),
+            Ability("Psychic",      1.6,  90, 500, PINK,   "Telekinetic burst"),
+            Ability("Shadow Ball",  1.5,  80, 480, PURPLE, "Dark sorcery orb"),
+        ],
+        "dodge_rate": 0.22,
+        "weapon_type": "staff",
+        "render_style": "delphox",
+        "species_group": "pokemon",
+        "element_types": ["fire", "psychic"]
+    },
+    "💧 Greninja": {
+        "color": (65, 115, 200),
+        "body_color": (35, 70, 135),
+        "hp": 720,
+        "speed": 340,
+        "mass": 1.7,
+        "size": 17,
+        "description": "Kalos stealth amphibian\nWater shuriken style strikes, ice, and dark pulses",
+        "abilities": [
+            Ability("Hydro Pump", 1.8, 110, 620, CYAN,   "Compressed water blast"),
+            Ability("Surf",       2.0,  90, 420, BLUE,   "Slides a water wave through the field"),
+            Ability("Dark Pulse", 1.5,  80, 480, PURPLE, "Shadowy pulse blast"),
+            Ability("Ice Beam",   1.4,  90, 560, WHITE,  "Narrow freezing beam"),
+        ],
+        "dodge_rate": 0.28,
+        "weapon_type": "katana",
+        "render_style": "greninja",
+        "species_group": "pokemon",
+        "element_types": ["water", "dark"]
+    },
 
 }
+
+POKEMON_CHARACTER_NAMES = [
+    "🍃 Venusaur", "🔥 Charizard", "💧 Blastoise",
+    "🌸 Meganium", "🔥 Typhlosion", "💧 Feraligatr",
+    "🍃 Sceptile", "🔥 Blaziken", "💧 Swampert",
+    "🍃 Torterra", "🔥 Infernape", "💧 Empoleon",
+    "🍃 Serperior", "🔥 Emboar", "💧 Samurott",
+    "🍃 Chesnaught", "🔥 Delphox", "💧 Greninja",
+]
+
+ORIGINAL_CHARACTER_NAMES = [name for name in CHARACTER_DATA.keys() if name not in POKEMON_CHARACTER_NAMES]
+LEGENDARY_CHARACTER_NAMES = []
+STARTER_POKEMON_NAMES = list(POKEMON_CHARACTER_NAMES)
+
+POKEMON_COUNTER_MOVES = {
+    "🍃 Venusaur": {"move": "Earthquake", "targets": ["fire", "flying", "poison", "steel"]},
+    "🔥 Charizard": {"move": "Dragon Claw", "targets": ["water", "electric", "rock"]},
+    "💧 Blastoise": {"move": "Ice Beam", "targets": ["grass", "electric"]},
+    "🌸 Meganium": {"move": "Earthquake", "targets": ["fire", "flying", "ice", "poison", "bug"]},
+    "🔥 Typhlosion": {"move": "Focus Blast", "targets": ["water", "rock", "ground"]},
+    "💧 Feraligatr": {"move": "Ice Punch", "targets": ["grass", "electric"]},
+    "🍃 Sceptile": {"move": "Dragon Pulse", "targets": ["fire", "ice", "flying", "bug"]},
+    "🔥 Blaziken": {"move": "Brave Bird", "targets": ["water", "ground", "psychic"]},
+    "💧 Swampert": {"move": "Ice Punch", "targets": ["grass"]},
+    "🍃 Torterra": {"move": "Stone Edge", "targets": ["ice", "fire", "flying", "bug"]},
+    "🔥 Infernape": {"move": "Mach Punch", "targets": ["water", "flying", "ground", "psychic"]},
+    "💧 Empoleon": {"move": "Ice Beam", "targets": ["electric", "ground", "fighting"]},
+    "🍃 Serperior": {"move": "Dragon Pulse", "targets": ["fire", "ice", "bug", "flying"]},
+    "🔥 Emboar": {"move": "Wild Charge", "targets": ["water", "ground", "psychic"]},
+    "💧 Samurott": {"move": "Megahorn", "targets": ["grass", "electric"]},
+    "🍃 Chesnaught": {"move": "Earthquake", "targets": ["fire", "flying", "psychic", "fairy"]},
+    "🔥 Delphox": {"move": "Psychic", "targets": ["water", "ground", "rock", "dark"]},
+    "💧 Greninja": {"move": "Ice Beam", "targets": ["grass", "electric", "fighting"]},
+}
+
+TYPE_EFFECTIVENESS.update(LEGENDARY_TYPE_EFFECTIVENESS)
+MOVE_TYPE_MAP.update(LEGENDARY_MOVE_TYPES)
+POKEMON_SPRITE_INDEX.update(LEGENDARY_SPRITES)
+POKEMON_COUNTER_MOVES.update(LEGENDARY_COUNTER_MOVES)
+
+_legendary_entries = {}
+for _legend_name, _legend_data in LEGENDARY_POKEMON_DATA.items():
+    _entry = dict(_legend_data)
+    _entry["abilities"] = [Ability(*ab) for ab in _legend_data["abilities"]]
+    _legendary_entries[_legend_name] = _entry
+
+CHARACTER_DATA.update(_legendary_entries)
+POKEMON_CHARACTER_NAMES.extend(_legendary_entries.keys())
+LEGENDARY_CHARACTER_NAMES = list(_legendary_entries.keys())
+STARTER_POKEMON_NAMES = [name for name in POKEMON_CHARACTER_NAMES if name not in LEGENDARY_CHARACTER_NAMES]
+ORIGINAL_CHARACTER_NAMES = [name for name in CHARACTER_DATA.keys() if name not in POKEMON_CHARACTER_NAMES]
 
 # ─── FIGHTER CLASS ────────────────────────────────────────────────────────────
 class Fighter:
@@ -1442,6 +2189,30 @@ class Fighter:
         self.weapon_type = data.get("weapon_type", "fists")
         self.has_shield = data.get("has_shield", False)
         self.is_blocking = False # Can be toggled if needed, but we'll use passive shield for now
+        self.render_style = data.get("render_style", "")
+        self.species_group = data.get("species_group", "original")
+        self.element_types = data.get("element_types", [])
+        self.legendary_theme = data.get("legendary_theme", "")
+        if not self.legendary_theme and self.species_group == "pokemon" and self.name in LEGENDARY_SPRITES:
+            if "electric" in self.element_types:
+                self.legendary_theme = "storm"
+            elif "ice" in self.element_types:
+                self.legendary_theme = "ice"
+            elif "ground" in self.element_types or "rock" in self.element_types:
+                self.legendary_theme = "earth"
+            elif "dark" in self.element_types or "ghost" in self.element_types:
+                self.legendary_theme = "dark"
+            elif "dragon" in self.element_types:
+                self.legendary_theme = "dragon"
+            elif "psychic" in self.element_types or "fairy" in self.element_types:
+                self.legendary_theme = "cosmic"
+            else:
+                self.legendary_theme = "aura"
+        self.move_types = data.get("move_types", {})
+        counter_info = POKEMON_COUNTER_MOVES.get(char_name, {})
+        self.counter_move = counter_info.get("move")
+        self.counter_targets = counter_info.get("targets", [])
+        self.sprite = self._load_sprite()
 
         # AI behavior
         self.ai_target: Optional['Fighter'] = None
@@ -1496,6 +2267,14 @@ class Fighter:
         self.hit_flash = 0.0
         self.death_timer = 0.0
         self.combo_count = 0
+        self.cast_flash_timer = 0.0
+        self.cast_ring_timer = 0.0
+        self.cast_color = self.color
+        self.cast_accent = self.body_color
+        self.cast_style = self.weapon_type
+        self.afterimages = []
+        self.collision_recover_timer = 0.0
+        self.ambient_phase = random.uniform(0.0, math.pi * 2)
 
         self.hazard_hit_count = 0
         self.dot_damage = 0.0
@@ -1504,6 +2283,671 @@ class Fighter:
     @property
     def pos(self):
         return (int(self.x), int(self.y))
+
+    def _sprite_candidates(self):
+        if self.species_group != "pokemon":
+            return []
+        candidates = []
+        sprite_info = POKEMON_SPRITE_INDEX.get(self.name, {})
+        dex = sprite_info.get("dex")
+        for rel_path in sprite_info.get("files", []):
+            for gen_folder, sprite_folder in sprite_info.get("folders", []):
+                candidates.append(Path(gen_folder) / sprite_folder / rel_path)
+                candidates.append(Path(gen_folder) / rel_path)
+        for gen_folder, sprite_folder in sprite_info.get("folders", []):
+            candidates.extend([
+                Path(gen_folder) / "pokemon" / "main-sprites" / sprite_folder / f"{dex}.png",
+                Path(gen_folder) / sprite_folder / f"{dex}.png",
+                Path(gen_folder) / f"{dex}.png",
+            ])
+        slug = self.name.split(" ", 1)[-1].lower().replace(".", "").replace("'", "").replace(" ", "_").replace("-", "_")
+        base = Path("assets") / "pokemon_sprites"
+        candidates.extend([
+            base / f"{slug}.png",
+            base / f"{slug}_front.png",
+            base / f"{slug}_idle.png",
+        ])
+        return candidates
+
+    def _load_sprite(self):
+        for path in self._sprite_candidates():
+            if path.exists():
+                try:
+                    return pygame.image.load(str(path)).convert_alpha()
+                except Exception:
+                    return None
+        return None
+
+    def _move_type(self, move_name):
+        return MOVE_TYPE_MAP.get(move_name)
+
+    def _effectiveness_multiplier(self, move_name, target):
+        if self.species_group != "pokemon" or target.species_group != "pokemon":
+            return 1.0
+        move_type = self._move_type(move_name)
+        if not move_type:
+            return 1.0
+        mult = 1.0
+        table = TYPE_EFFECTIVENESS.get(move_type, {})
+        for defender_type in target.element_types:
+            mult *= table.get(defender_type, 1.0)
+        return mult
+
+    def _mix_color(self, c1, c2, t=0.5):
+        t = max(0.0, min(1.0, t))
+        return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))
+
+    def _spawn_afterimages(self, count, color=None, spread=18):
+        base_color = color or self.cast_color
+        for idx in range(count):
+            offset = (idx - count // 2) * spread * 0.35
+            self.afterimages.append({
+                "x": self.x - self.facing * offset,
+                "y": self.y + math.sin(idx * 1.7) * 5,
+                "size": self.size * (1.0 - idx * 0.06),
+                "life": 0.28 + idx * 0.03,
+                "max_life": 0.28 + idx * 0.03,
+                "color": base_color,
+            })
+
+    def _trigger_ability_visual(self, ab, target, ndx, ndy, dist):
+        aim_angle = math.atan2(ndy, ndx)
+        intensity = 1.0
+        if ab.cooldown >= 10 or ab.damage >= 180:
+            intensity = 1.9
+        elif ab.cooldown >= 5 or ab.damage >= 90:
+            intensity = 1.45
+        elif ab.damage == 0:
+            intensity = 1.25
+
+        self.cast_color = self._mix_color(self.color, ab.color, 0.65)
+        self.cast_accent = self._mix_color(self.body_color, WHITE, 0.35)
+        self.cast_flash_timer = 0.18 + intensity * 0.08
+        self.cast_ring_timer = 0.30 + intensity * 0.14
+        self.cast_style = self.weapon_type
+
+        if ab.damage == 0:
+            self.cast_style = "support"
+        elif ab.cooldown >= 10:
+            self.cast_style = f"{self.weapon_type}_ultimate"
+
+        self.particles.emit_ring(
+            self.x,
+            self.y,
+            self.cast_color,
+            count=int(10 + intensity * 6),
+            speed=120 + intensity * 90,
+            size=3 + intensity * 2,
+            life=0.35 + intensity * 0.08,
+        )
+
+        if ab.range > 280:
+            tip_x = self.x + ndx * min(dist, ab.range * 0.55)
+            tip_y = self.y + ndy * min(dist, ab.range * 0.55)
+            self.particles.emit_beam(
+                self.x,
+                self.y,
+                tip_x,
+                tip_y,
+                self.cast_accent,
+                count=int(8 + intensity * 5),
+                size=2 + int(intensity),
+                life=0.18 + intensity * 0.05,
+            )
+
+        if self.weapon_type == "sword":
+            self.particles.emit_slash(self.x, self.y, aim_angle, self.cast_color, size=int(self.size * (2.1 + 0.3 * intensity)), count=int(12 + intensity * 4))
+            self.particles.emit(self.x, self.y, GOLD, count=int(8 + intensity * 3), speed=180, spread=0.55, gravity=False, direction=aim_angle)
+            self._spawn_afterimages(int(2 + intensity), self.cast_accent)
+        elif self.weapon_type == "staff":
+            orbit_r = int(self.size * (2.1 + 0.4 * intensity))
+            for i in range(int(6 + intensity * 2)):
+                ang = aim_angle + (i / max(1, int(6 + intensity * 2))) * math.pi * 2
+                px = self.x + math.cos(ang) * orbit_r
+                py = self.y + math.sin(ang) * orbit_r
+                self.particles.emit(px, py, self.cast_color, count=2, speed=50, size=4, life=0.45, gravity=False)
+            self.particles.emit_ring(self.x, self.y, self.cast_accent, count=int(8 + intensity * 3), speed=70, size=4, life=0.5)
+        elif self.weapon_type == "katana":
+            self.particles.emit_slash(self.x, self.y, aim_angle + 0.22, self.cast_color, size=int(self.size * (2.4 + 0.25 * intensity)), count=int(10 + intensity * 3))
+            self.particles.emit_slash(self.x, self.y, aim_angle - 0.22, self.cast_accent, size=int(self.size * (1.9 + 0.2 * intensity)), count=int(10 + intensity * 3))
+            self._spawn_afterimages(int(3 + intensity), self.cast_color, spread=24)
+        elif self.weapon_type == "blaster":
+            muzzle_x = self.x + ndx * (self.size + 12)
+            muzzle_y = self.y + ndy * (self.size * 0.3)
+            self.particles.emit(muzzle_x, muzzle_y, self.cast_color, count=int(10 + intensity * 4), speed=220, spread=0.35, size=4, life=0.35, gravity=False, direction=aim_angle)
+            self.particles.emit_beam(self.x, self.y, muzzle_x + ndx * 80, muzzle_y + ndy * 80, CYAN, count=int(7 + intensity * 3), size=3, life=0.2)
+        elif self.weapon_type == "bow":
+            anchor_x = self.x - ndx * 8
+            anchor_y = self.y - ndy * 8
+            for i in range(int(3 + intensity * 2)):
+                fan = (i - 1) * 0.18
+                self.particles.emit(anchor_x, anchor_y, self.cast_color, count=3, speed=180, spread=0.12, size=3, life=0.4, gravity=False, direction=aim_angle + fan)
+            self.particles.emit_beam(anchor_x, anchor_y, anchor_x + ndx * 55, anchor_y + ndy * 55, self.cast_accent, count=int(6 + intensity * 3), size=2, life=0.18)
+        elif self.weapon_type == "trident":
+            for fork in (-0.16, 0.0, 0.16):
+                tx = self.x + math.cos(aim_angle + fork) * self.size * 2.4
+                ty = self.y + math.sin(aim_angle + fork) * self.size * 2.4
+                self.particles.emit_beam(self.x, self.y, tx, ty, self.cast_color, count=int(6 + intensity * 2), size=3, life=0.24)
+            self.particles.emit_ring(self.x, self.y, BLUE, count=int(9 + intensity * 3), speed=140, size=4, life=0.4)
+        elif self.weapon_type == "claws":
+            for claw in (-10, 0, 10):
+                ox = self.x - ndy * claw
+                oy = self.y + ndx * claw
+                self.particles.emit_slash(ox, oy, aim_angle, self.cast_color, size=int(self.size * (1.8 + 0.15 * intensity)), count=int(8 + intensity * 3))
+            self._spawn_afterimages(int(2 + intensity), self.cast_color, spread=20)
+        elif self.weapon_type == "hammer":
+            self.particles.emit_ring(self.x, self.y, self.cast_color, count=int(12 + intensity * 4), speed=240, size=5, life=0.42)
+            self.particles.emit(self.x, self.y + self.size, SILVER, count=int(10 + intensity * 4), speed=220, size=4, life=0.45)
+        elif self.weapon_type == "chain":
+            prev_x, prev_y = self.x, self.y
+            for i in range(1, int(6 + intensity * 2)):
+                seg_x = self.x + ndx * i * 16 + math.sin(i * 0.9) * 8 * ndy
+                seg_y = self.y + ndy * i * 16 - math.sin(i * 0.9) * 8 * ndx
+                self.particles.emit_beam(prev_x, prev_y, seg_x, seg_y, self.cast_color, count=4, size=2, life=0.18)
+                prev_x, prev_y = seg_x, seg_y
+            self.particles.emit(prev_x, prev_y, RED, count=int(7 + intensity * 3), speed=120, size=4, life=0.4)
+        elif self.cast_style == "support":
+            self.particles.emit_ring(self.x, self.y, GREEN, count=int(14 + intensity * 3), speed=160, size=5, life=0.55)
+            for i in range(5):
+                ang = aim_angle + i * (math.pi * 2 / 5)
+                self.particles.emit(self.x + math.cos(ang) * self.size, self.y + math.sin(ang) * self.size, self.cast_accent, count=3, speed=70, size=3, life=0.5, gravity=False)
+        else:
+            self.particles.emit_ring(self.x, self.y, self.cast_color, count=int(10 + intensity * 2), speed=160, size=4, life=0.35)
+
+        if ab.cooldown >= 10:
+            crown_y = self.y - self.size * 1.8
+            for i in range(6):
+                ang = aim_angle + i * (math.pi / 3)
+                self.particles.emit_beam(
+                    self.x,
+                    crown_y,
+                    self.x + math.cos(ang) * (28 + intensity * 8),
+                    crown_y + math.sin(ang) * (28 + intensity * 8),
+                    self.cast_accent,
+                    count=5,
+                    size=2 + int(intensity),
+                    life=0.24,
+                )
+
+    def _draw_ambient_fx(self, screen, x, y, s):
+        t = pygame.time.get_ticks() * 0.001 + self.ambient_phase
+
+        if self.weapon_type == "staff":
+            for i in range(3):
+                ang = t * 1.7 + i * (math.pi * 2 / 3)
+                rad = s + 14
+                px = x + math.cos(ang) * rad
+                py = y + math.sin(ang) * (rad * 0.7)
+                pygame.draw.circle(screen, self.cast_color if self.cast_flash_timer > 0 else self.color, (int(px), int(py)), 4)
+                pygame.draw.circle(screen, WHITE, (int(px), int(py)), 2)
+
+        elif self.weapon_type == "blaster":
+            for i in range(2):
+                ang = t * 2.4 + i * math.pi
+                rad = s + 10
+                px = x + math.cos(ang) * rad
+                py = y + math.sin(ang) * 8
+                pygame.draw.circle(screen, CYAN, (int(px), int(py)), 3)
+            arc_rect = pygame.Rect(x - s - 10, y - s - 6, (s + 10) * 2, (s + 6) * 2)
+            pygame.draw.arc(screen, (*self.color[:2], self.color[2]) if len(self.color) == 3 else self.color, arc_rect, t, t + math.pi * 0.9, 2)
+
+        elif self.weapon_type == "trident":
+            for i in range(2):
+                ang = t * 1.4 + i * math.pi
+                rad = s + 16
+                px = x + math.cos(ang) * rad
+                py = y + math.sin(ang) * rad * 0.5
+                pygame.draw.circle(screen, BLUE, (int(px), int(py)), 5, 2)
+                pygame.draw.circle(screen, CYAN, (int(px), int(py)), 2)
+
+        elif self.weapon_type == "bow":
+            for i in range(3):
+                ang = t * 1.8 + i * 0.45
+                px = x - self.facing * (s + 10 + i * 7)
+                py = y + math.sin(ang) * 10
+                pygame.draw.line(screen, self.color, (int(px), int(py)), (int(px + self.facing * 14), int(py - 6)), 2)
+
+        elif self.weapon_type in {"katana", "claws"}:
+            for i in range(2):
+                ang = t * 2.6 + i * math.pi
+                px = x + math.cos(ang) * (s + 8)
+                py = y + math.sin(ang) * 6
+                pygame.draw.circle(screen, self.body_color, (int(px), int(py)), 3)
+
+        name = self.name.encode("ascii", "ignore").decode("ascii")
+        if "Dragon" in name or "Phoenix" in name or "Fire" in name or "Lava" in name:
+            for i in range(2):
+                ang = t * 1.9 + i * math.pi
+                px = x + math.cos(ang) * (s + 6)
+                py = y + s * 0.8 + math.sin(ang * 1.3) * 6
+                pygame.draw.circle(screen, ORANGE, (int(px), int(py)), 4)
+                pygame.draw.circle(screen, RED, (int(px), int(py)), 2)
+
+        if "Ghost" in name or "Phantom" in name or "Shadow" in name or "Void" in name:
+            ghost = pygame.Surface((int((s + 18) * 2), int((s + 18) * 2)), pygame.SRCALPHA)
+            pygame.draw.circle(ghost, (*PURPLE, 22), (ghost.get_width() // 2, ghost.get_height() // 2), s + 12)
+            screen.blit(ghost, (x - ghost.get_width() // 2, y - ghost.get_height() // 2))
+
+        if "Storm" in name or "Thunder" in name or "Weather" in name or "Lightning" in name:
+            for i in range(2):
+                ang = t * 3.2 + i * math.pi
+                px = x + math.cos(ang) * (s + 18)
+                py = y - s - 4 + math.sin(ang * 1.8) * 8
+                pygame.draw.line(screen, YELLOW, (int(px), int(py - 5)), (int(px + 4), int(py + 5)), 2)
+                pygame.draw.line(screen, WHITE, (int(px + 1), int(py - 4)), (int(px + 3), int(py + 3)), 1)
+
+        if "Cosmic" in name or "Nova" in name or "Sorcerer" in name or "Mirror" in name:
+            for i in range(4):
+                ang = t * 1.1 + i * (math.pi / 2)
+                rad = s + 22
+                px = x + math.cos(ang) * rad
+                py = y + math.sin(ang) * rad * 0.7
+                pygame.draw.circle(screen, self.cast_accent if self.cast_flash_timer > 0 else WHITE, (int(px), int(py)), 2)
+
+        theme = self.legendary_theme
+        if theme == "storm":
+            for i in range(3):
+                ang = t * 2.4 + i * (math.pi * 2 / 3)
+                px = x + math.cos(ang) * (s + 16)
+                py = y - s * 0.6 + math.sin(ang * 1.4) * 8
+                pygame.draw.line(screen, YELLOW, (int(px), int(py - 4)), (int(px + 5), int(py + 5)), 2)
+        elif theme == "aura":
+            for i in range(3):
+                ang = t * 1.4 + i * (math.pi * 2 / 3)
+                px = x + math.cos(ang) * (s + 18)
+                py = y + math.sin(ang) * (s * 0.55)
+                pygame.draw.circle(screen, GOLD, (int(px), int(py)), 3)
+                pygame.draw.circle(screen, WHITE, (int(px), int(py)), 1)
+        elif theme == "cosmic":
+            for i in range(5):
+                ang = t * 0.9 + i * (math.pi * 2 / 5)
+                px = x + math.cos(ang) * (s + 20)
+                py = y + math.sin(ang) * (s * 0.75)
+                pygame.draw.circle(screen, WHITE, (int(px), int(py)), 2)
+        elif theme == "dragon":
+            for i in range(2):
+                ang = t * 1.7 + i * math.pi
+                px = x + math.cos(ang) * (s + 12)
+                py = y + math.sin(ang) * 8
+                pygame.draw.arc(screen, CYAN, (px - 10, py - 6, 20, 12), 0.2, math.pi + 0.4, 2)
+        elif theme == "dark":
+            halo = pygame.Surface((int((s + 20) * 2), int((s + 20) * 2)), pygame.SRCALPHA)
+            pygame.draw.circle(halo, (*PURPLE, 20), (halo.get_width() // 2, halo.get_height() // 2), s + 14)
+            screen.blit(halo, (x - halo.get_width() // 2, y - halo.get_height() // 2))
+        elif theme == "earth":
+            for i in range(4):
+                px = x - s + i * (s * 0.65)
+                py = y + s + math.sin(t * 2 + i) * 2
+                pygame.draw.line(screen, BROWN, (int(px), int(py)), (int(px + 8), int(py - 6)), 2)
+        elif theme == "ice":
+            for i in range(3):
+                ang = t * 1.3 + i * (math.pi * 2 / 3)
+                px = x + math.cos(ang) * (s + 14)
+                py = y + math.sin(ang) * (s * 0.6)
+                pygame.draw.line(screen, WHITE, (int(px - 4), int(py)), (int(px + 4), int(py)), 1)
+                pygame.draw.line(screen, WHITE, (int(px), int(py - 4)), (int(px), int(py + 4)), 1)
+
+    def _draw_pokemon_details(self, screen, x, y, s, body_draw, draw_color):
+        style = self.render_style
+        if not style:
+            return
+
+        t = pygame.time.get_ticks() * 0.001 + self.ambient_phase
+        accent = self.cast_color if self.cast_flash_timer > 0 else draw_color
+
+        if style == "venusaur":
+            bulb = pygame.Rect(x - s - 6, y - s - 14, s * 2 + 12, s + 10)
+            pygame.draw.ellipse(screen, (40, 110, 55), bulb)
+            pygame.draw.ellipse(screen, (65, 155, 85), bulb, 3)
+            pygame.draw.circle(screen, (210, 105, 135), (x, y - s - 10), s // 2 + 6)
+            for ang in (-1.2, -0.35, 0.35, 1.2):
+                leaf = [(x, y - s - 2), (x + math.cos(ang) * (s + 18), y - s - 10 + math.sin(ang) * 16), (x + math.cos(ang) * (s + 8), y - s - 24)]
+                pygame.draw.polygon(screen, (70, 155, 90), leaf)
+        elif style == "charizard":
+            left_wing = [(x - s, y - 6), (x - s - 26, y - s - 16), (x - 8, y - s + 4)]
+            right_wing = [(x + s, y - 6), (x + s + 26, y - s - 16), (x + 8, y - s + 4)]
+            pygame.draw.polygon(screen, (70, 105, 150), left_wing)
+            pygame.draw.polygon(screen, (70, 105, 150), right_wing)
+            pygame.draw.polygon(screen, (235, 175, 90), [(x, y + s - 2), (x + self.facing * (s + 18), y + s + 10), (x + self.facing * (s + 8), y + s + 18)])
+            flame_x = x + self.facing * (s + 18)
+            flame_y = y + s + 10
+            pygame.draw.circle(screen, ORANGE, (int(flame_x), int(flame_y)), 5)
+            pygame.draw.circle(screen, YELLOW, (int(flame_x + self.facing * 2), int(flame_y - 2)), 3)
+        elif style == "blastoise":
+            shell = pygame.Rect(x - s - 4, y - s + 4, s * 2 + 8, s * 2 - 6)
+            pygame.draw.ellipse(screen, (90, 75, 55), shell)
+            pygame.draw.ellipse(screen, (180, 170, 140), (x - s + 4, y - s + 10, s * 2 - 8, s * 2 - 18), 3)
+            for side in (-1, 1):
+                start = (x + side * (s - 4), y - s + 4)
+                end = (x + side * (s + 16), y - s - 14 + math.sin(t * 1.5) * 3)
+                pygame.draw.line(screen, SILVER, start, end, 6)
+                pygame.draw.circle(screen, CYAN, (int(end[0]), int(end[1])), 4)
+        elif style == "meganium":
+            for i in range(6):
+                ang = i * math.pi / 3 + math.sin(t) * 0.08
+                px = x + math.cos(ang) * (s + 6)
+                py = y - s + math.sin(ang) * (s * 0.7)
+                pygame.draw.circle(screen, (235, 120, 150), (int(px), int(py)), 6)
+            pygame.draw.circle(screen, (245, 235, 120), (x, y - s + 2), 5)
+            pygame.draw.line(screen, accent, (x - 6, y - s - 2), (x - 12, y - s - 16), 2)
+            pygame.draw.line(screen, accent, (x + 6, y - s - 2), (x + 12, y - s - 16), 2)
+        elif style == "typhlosion":
+            for dx in (-14, 0, 14):
+                peak = [(x + dx - 6, y - s + 2), (x + dx, y - s - 18 - abs(dx) * 0.2), (x + dx + 6, y - s + 2)]
+                pygame.draw.polygon(screen, ORANGE, peak)
+                pygame.draw.polygon(screen, YELLOW, [(peak[0][0] + 2, peak[0][1]), peak[1], (peak[2][0] - 2, peak[2][1])])
+        elif style == "feraligatr":
+            for dy in (-12, 0, 12):
+                pygame.draw.polygon(screen, RED, [(x - 4, y + dy), (x - 14, y + dy - 6), (x - 10, y + dy + 6)])
+                pygame.draw.polygon(screen, RED, [(x + 4, y + dy), (x + 14, y + dy - 6), (x + 10, y + dy + 6)])
+        elif style == "sceptile":
+            for side in (-1, 1):
+                pygame.draw.polygon(screen, (85, 200, 110), [(x + side * (s - 4), y), (x + side * (s + 18), y - 10), (x + side * (s + 10), y + 8)])
+            tail = [(x, y + s - 2), (x - 10, y + s + 18), (x + 10, y + s + 18)]
+            pygame.draw.polygon(screen, (90, 210, 105), tail)
+        elif style == "blaziken":
+            for side in (-1, 1):
+                pygame.draw.polygon(screen, (245, 235, 180), [(x + side * 8, y + 6), (x + side * 18, y + s + 8), (x + side * 4, y + s + 4)])
+            crest = [(x - 6, y - s + 6), (x, y - s - 16), (x + 6, y - s + 6)]
+            pygame.draw.polygon(screen, RED, crest)
+        elif style == "swampert":
+            pygame.draw.line(screen, (240, 120, 70), (x - 8, y - s + 6), (x - 20, y - s - 8), 6)
+            pygame.draw.line(screen, (240, 120, 70), (x + 8, y - s + 6), (x + 20, y - s - 8), 6)
+            pygame.draw.circle(screen, (240, 120, 70), (x - s + 4, y - 2), 5)
+            pygame.draw.circle(screen, (240, 120, 70), (x + s - 4, y - 2), 5)
+        elif style == "torterra":
+            shell = pygame.Rect(x - s - 4, y - s + 2, s * 2 + 8, s * 2 - 2)
+            pygame.draw.ellipse(screen, (90, 80, 55), shell)
+            trunk = pygame.Rect(x - 4, y - s - 18, 8, 18)
+            pygame.draw.rect(screen, (110, 80, 45), trunk)
+            pygame.draw.circle(screen, (60, 150, 70), (x, y - s - 22), 14)
+        elif style == "infernape":
+            flame = [(x - 7, y - s + 6), (x, y - s - 18), (x + 7, y - s + 6)]
+            pygame.draw.polygon(screen, ORANGE, flame)
+            pygame.draw.circle(screen, (235, 205, 95), (x - s + 6, y + 2), 4)
+            pygame.draw.circle(screen, (235, 205, 95), (x + s - 6, y + 2), 4)
+        elif style == "empoleon":
+            pygame.draw.polygon(screen, (235, 210, 100), [(x - 5, y - s + 8), (x, y - s - 16), (x + 5, y - s + 8)])
+            pygame.draw.polygon(screen, (235, 210, 100), [(x - 14, y - s + 12), (x - 5, y - s - 2), (x - 1, y - s + 12)])
+            pygame.draw.polygon(screen, (235, 210, 100), [(x + 14, y - s + 12), (x + 5, y - s - 2), (x + 1, y - s + 12)])
+            pygame.draw.polygon(screen, (240, 180, 70), [(x - 6, y + 2), (x + 6, y + 2), (x, y + 10)])
+        elif style == "serperior":
+            for i in range(3):
+                rad = s + 6 + i * 5
+                pygame.draw.arc(screen, (95, 220, 110), (x - rad, y - rad * 0.6, rad * 2, rad * 1.2), math.pi * 0.1, math.pi * 0.9, 3)
+            for side in (-1, 1):
+                pygame.draw.polygon(screen, (220, 235, 120), [(x + side * 8, y - s + 2), (x + side * 24, y - s - 8), (x + side * 16, y - s + 12)])
+        elif style == "emboar":
+            for side in (-1, 1):
+                pygame.draw.circle(screen, ORANGE, (x + side * (s - 2), y), 5, 2)
+            beard = [(x - 10, y + 2), (x, y + s + 10), (x + 10, y + 2)]
+            pygame.draw.polygon(screen, ORANGE, beard)
+        elif style == "samurott":
+            pygame.draw.polygon(screen, (240, 230, 180), [(x - 5, y - s + 10), (x, y - s - 16), (x + 5, y - s + 10)])
+            for side in (-1, 1):
+                pygame.draw.line(screen, SILVER, (x + side * (s - 6), y - 2), (x + side * (s + 12), y - 12), 4)
+            pygame.draw.arc(screen, WHITE, (x - s - 4, y - s + 2, s * 2 + 8, s * 2 - 2), 0.1, math.pi - 0.1, 2)
+        elif style == "chesnaught":
+            for ang in [0.4, 0.9, 1.3, 1.8, 2.2, 2.7]:
+                px = x + math.cos(ang) * (s + 6)
+                py = y + math.sin(ang) * (s + 2)
+                pygame.draw.polygon(screen, (180, 220, 90), [(px, py), (px + 6, py + 2), (px + 2, py - 8)])
+        elif style == "delphox":
+            robe = [(x - s + 4, y + 6), (x - 8, y + s + 12), (x + 8, y + s + 12), (x + s - 4, y + 6)]
+            pygame.draw.polygon(screen, (170, 70, 55), robe)
+            pygame.draw.line(screen, (120, 80, 50), (x + self.facing * (s - 4), y + 2), (x + self.facing * (s + 16), y - 14), 3)
+            pygame.draw.circle(screen, ORANGE, (int(x + self.facing * (s + 16)), int(y - 14)), 4)
+        elif style == "greninja":
+            scarf = pygame.Rect(x - s - 4, y - 4, s * 2 + 8, 8)
+            pygame.draw.ellipse(screen, (230, 90, 130), scarf)
+            for side in (-1, 1):
+                pygame.draw.polygon(screen, (160, 220, 255), [(x + side * 6, y - s + 10), (x + side * 16, y - s - 6), (x + side * 2, y - s + 2)])
+
+    def _ability_damage(self, ab, scale=1.0, target=None):
+        dmg = ab.damage * scale
+        if self.hidden_trait == "RAGE" and self.trait_timer > 0:
+            dmg *= 2.0
+        if target is not None:
+            move_type = self._move_type(ab.name)
+            if move_type and move_type in self.element_types:
+                dmg *= 1.2
+            dmg *= self._effectiveness_multiplier(ab.name, target)
+            if self.counter_move == ab.name and any(t in target.element_types for t in self.counter_targets):
+                dmg *= 1.35
+        return dmg
+
+    def _spawn_ability_projectile(self, projectiles, ab, vx, vy, color, size, trail=None, piercing=False, homing=False, aoe_radius=0, target=None):
+        p = Projectile(self.x, self.y, vx, vy, self._ability_damage(ab, target=target), color, size, self.team, trail or color, piercing=piercing, homing=homing, aoe_radius=aoe_radius, owner=self)
+        projectiles.append(p)
+        return p
+
+    def _apply_pokemon_hit(self, target, ab, knockback_x=0, knockback_y=-200, scale=1.0):
+        dmg = self._ability_damage(ab, scale=scale, target=target)
+        dealt = target.take_damage(dmg, knockback_x=knockback_x, knockback_y=knockback_y, attacker=self)
+        mult = self._effectiveness_multiplier(ab.name, target)
+        if mult > 1.01:
+            target.trait_label_txt = "SUPER EFFECTIVE!"
+            target.trait_label_timer = 1.0
+        elif mult < 0.99:
+            target.trait_label_txt = "NOT VERY EFFECTIVE"
+            target.trait_label_timer = 0.8
+        return dealt
+
+    def _spawn_quake_zone(self, x, y, color, damage, life=0.9, radius=150):
+        if hasattr(self, "battle_ref"):
+            self.battle_ref.shake = max(self.battle_ref.shake, 14)
+            self.battle_ref.add_field_effect(
+                "quake",
+                x,
+                y,
+                color,
+                life,
+                radius=radius,
+                owner_team=self.team,
+                damage=damage,
+                secondary=SILVER,
+                spin=0.0,
+                interval=0.18,
+            )
+
+    def _handle_legendary_move(self, name, ab, target, projectiles, ndx, ndy, dist):
+        attack_angle = math.atan2(ndy, ndx)
+        if name in {"Roost", "Recover", "Moonlight"}:
+            heal_frac = 0.26 if name == "Roost" else 0.34 if name == "Recover" else 0.3
+            self.heal(self.max_hp * heal_frac)
+            self.invincible_timer = max(self.invincible_timer, 0.55)
+            self.particles.emit_ring(self.x, self.y, ab.color, count=24, speed=120, size=6, life=0.6)
+            return True
+
+        if name in {"Calm Mind", "Cosmic Power", "Geomancy", "Iron Defense"}:
+            self.damage_mult += 0.18 if name != "Geomancy" else 0.28
+            self.invincible_timer = max(self.invincible_timer, 0.35 if name != "Iron Defense" else 0.6)
+            self.heal(self.max_hp * (0.08 if name != "Geomancy" else 0.14))
+            self.particles.emit_ring(self.x, self.y, ab.color, count=28, speed=110, size=7, life=0.8)
+            return True
+
+        if name in {"Blizzard", "Heat Wave", "Fiery Wrath", "Astral Barrage", "Hurricane"}:
+            self.particles.emit_ring(target.x, target.y, ab.color, count=32, speed=180, size=6, life=0.7)
+            if hasattr(self, "battle_ref"):
+                effect_type = "cloud" if name in {"Blizzard", "Fiery Wrath", "Astral Barrage"} else "field"
+                secondary = WHITE if name == "Blizzard" else RED
+                if name == "Fiery Wrath":
+                    secondary = PURPLE
+                    self.battle_ref.impact_flash = max(self.battle_ref.impact_flash, 0.04)
+                elif name == "Astral Barrage":
+                    secondary = (220, 180, 255)
+                    self.battle_ref.impact_flash = max(self.battle_ref.impact_flash, 0.06)
+                elif name == "Hurricane":
+                    secondary = CYAN
+                self.battle_ref.add_field_effect(effect_type, target.x, target.y, ab.color, 2.8,
+                                                 radius=100, owner_team=self.team, damage=ab.damage,
+                                                 secondary=secondary, spin=1.2 if name != "Hurricane" else 3.8, interval=0.3)
+            if name == "Fiery Wrath":
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, CRIMSON, count=18, size=4, life=0.3)
+                self.particles.emit_ring(target.x, target.y, PURPLE, count=18, speed=150, size=5, life=0.5)
+            elif name == "Astral Barrage":
+                for i in range(4):
+                    ox = target.x + random.uniform(-70, 70)
+                    oy = target.y + random.uniform(-70, 70)
+                    self.particles.emit_beam(self.x, self.y, ox, oy, (205, 180, 255), count=12, size=3, life=0.25)
+            elif name == "Hurricane":
+                for i in range(3):
+                    arc_angle = attack_angle + i * 2.1
+                    self.particles.emit(self.x + math.cos(arc_angle) * 30, self.y + math.sin(arc_angle) * 30,
+                                        CYAN, count=6, speed=180, size=4, life=0.45, gravity=False,
+                                        direction=arc_angle + math.pi * 0.5)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, knockback_x=ndx*180, knockback_y=-180)
+                if name in {"Blizzard", "Hurricane"}:
+                    target.stun_timer = max(target.stun_timer, 0.35)
+            return True
+
+        if name in {"Thunder", "Psystrike", "Aura Sphere", "Aeroblast", "Ancient Power", "Moonblast", "Blue Flare", "Photon Geyser", "Dynamax Cannon", "Dazzling Gleam", "Mystical Fire", "Oblivion Wing", "Thunder Cage"}:
+            if name == "Thunder":
+                self.particles.emit_beam(target.x, target.y - 180, target.x, target.y, ab.color, count=22, size=4, life=0.28)
+                if dist < ab.range:
+                    self._apply_pokemon_hit(target, ab, knockback_x=ndx*100, knockback_y=-260)
+                    target.stun_timer = max(target.stun_timer, 0.5)
+                return True
+            if name == "Thunder Cage":
+                self.particles.emit_trap(target.x, target.y, ab.color, size=90, count=18)
+                if hasattr(self, "battle_ref"):
+                    self.battle_ref.add_field_effect("cage", target.x, target.y, ab.color, 2.6,
+                                                     radius=78, owner_team=self.team, damage=ab.damage,
+                                                     secondary=WHITE, spin=1.4, interval=0.28)
+                if dist < ab.range:
+                    self._apply_pokemon_hit(target, ab, knockback_x=ndx*120, knockback_y=-120)
+                return True
+            if name == "Dazzling Gleam":
+                self.particles.emit_ring(self.x, self.y, ab.color, count=26, speed=200, size=5, life=0.4)
+                if dist < ab.range:
+                    self._apply_pokemon_hit(target, ab, knockback_x=ndx*140, knockback_y=-160)
+                return True
+            if name == "Blue Flare":
+                self.particles.emit_ring(self.x, self.y, CYAN, count=18, speed=140, size=5, life=0.4)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, CYAN, count=14, size=3, life=0.22)
+                self.particles.emit_ring(target.x, target.y, WHITE, count=18, speed=210, size=6, life=0.3)
+                self._spawn_ability_projectile(projectiles, ab, ndx*500, ndy*500, CYAN, 10, trail=WHITE, aoe_radius=70, target=target)
+                return True
+            if name == "Photon Geyser":
+                for i in range(3):
+                    off = (i - 1) * 12
+                    self.particles.emit_beam(self.x, self.y + off, target.x, target.y - off, WHITE, count=12, size=3, life=0.25)
+                self.particles.emit_ring(self.x, self.y, GOLD, count=10, speed=70, size=6, life=0.45)
+                self.particles.emit_ring(target.x, target.y, WHITE, count=16, speed=180, size=5, life=0.35)
+                self._spawn_ability_projectile(projectiles, ab, ndx*560, ndy*560, WHITE, 9, trail=GOLD, piercing=True, target=target)
+                return True
+            if name == "Dynamax Cannon":
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, PINK, count=28, size=4, life=0.3)
+                if hasattr(self, "battle_ref"):
+                    self.battle_ref.impact_flash = max(self.battle_ref.impact_flash, 0.08)
+                    self.battle_ref.shake = min(18.0, self.battle_ref.shake + 3.0)
+                self._spawn_ability_projectile(projectiles, ab, ndx*620, ndy*620, PINK, 11, trail=CYAN, piercing=True, aoe_radius=85, target=target)
+                return True
+            if name == "Oblivion Wing":
+                self.particles.emit_slash(self.x, self.y, attack_angle - 0.35, ab.color, size=int(self.size * 2.4), count=10)
+                self.particles.emit_slash(self.x, self.y, attack_angle + 0.35, ab.color, size=int(self.size * 2.4), count=10)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, ab.color, count=18, size=4, life=0.35)
+                if dist < ab.range:
+                    dealt = self._apply_pokemon_hit(target, ab, knockback_x=ndx*160, knockback_y=-180)
+                    self.heal(dealt * 0.55)
+                return True
+            if name == "Moongeist Beam":
+                self.particles.emit_ring(self.x, self.y, (200, 190, 255), count=14, speed=90, size=5, life=0.4)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, (190, 180, 255), count=24, size=4, life=0.28)
+                if dist < ab.range:
+                    self._apply_pokemon_hit(target, ab, knockback_x=ndx*220, knockback_y=-240)
+                return True
+            trail = WHITE if name in {"Aeroblast", "Moonblast", "Dazzling Gleam"} else CYAN if name == "Dynamax Cannon" else None
+            self._spawn_ability_projectile(projectiles, ab, ndx*520, ndy*520, ab.color, 8 if ab.damage >= 100 else 7, trail=trail, target=target)
+            return True
+
+        if name in {"Sacred Fire", "Origin Pulse"}:
+            self.particles.emit_ring(self.x, self.y, ab.color, count=20, speed=160, size=5, life=0.45)
+            for i in range(3):
+                angle = math.atan2(ndy, ndx) + (i - 1) * (0.2 if name == "Origin Pulse" else 0.1)
+                vx = math.cos(angle) * (460 if name == "Origin Pulse" else 420)
+                vy = math.sin(angle) * (460 if name == "Origin Pulse" else 420)
+                self._spawn_ability_projectile(projectiles, ab, vx, vy, ab.color, 8 if name == "Origin Pulse" else 7, trail=WHITE, target=target)
+            return True
+
+        if name in {"Precipice Blades", "Earth Power", "Thousand Arrows"}:
+            self._spawn_quake_zone(target.x, target.y, ab.color, ab.damage, life=1.05 if name == "Precipice Blades" else 0.85, radius=165 if name == "Precipice Blades" else 135)
+            if name == "Precipice Blades":
+                for i in range(5):
+                    px = target.x - 80 + i * 40
+                    self.particles.emit_beam(px, target.y + 70, px + random.uniform(-10, 10), target.y - 40, BROWN, count=8, size=4, life=0.35)
+            elif name == "Thousand Arrows":
+                for i in range(6):
+                    ang = attack_angle + (i - 2.5) * 0.18
+                    self.particles.emit_beam(self.x, self.y, self.x + math.cos(ang) * 160, self.y + math.sin(ang) * 160, GREEN, count=8, size=3, life=0.25)
+            if dist < ab.range * 1.4:
+                self._apply_pokemon_hit(target, ab, knockback_x=ndx*320, knockback_y=-220)
+                target.stun_timer = max(target.stun_timer, 0.45)
+            return True
+
+        if name in {"Dragon Ascent", "Sacred Sword", "Shadow Force", "Sunsteel Strike", "Thunderous Kick", "Play Rough", "Behemoth Blade", "Behemoth Bash", "Wicked Blow", "Glacial Lance", "Horn Leech", "Iron Head"}:
+            if name == "Behemoth Blade":
+                self.particles.emit_slash(self.x, self.y, attack_angle, WHITE, size=int(self.size * 3.2), count=22)
+                self.particles.emit_slash(self.x, self.y, attack_angle + 0.12, CYAN, size=int(self.size * 3.6), count=18)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, CYAN, count=14, size=3, life=0.2)
+            elif name == "Behemoth Bash":
+                self.particles.emit_ring(self.x, self.y, SILVER, count=20, speed=220, size=7, life=0.32)
+                self.particles.emit_ring(target.x, target.y, WHITE, count=14, speed=140, size=5, life=0.25)
+            elif name == "Sunsteel Strike":
+                self.particles.emit_ring(self.x, self.y, GOLD, count=24, speed=180, size=7, life=0.28)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, WHITE, count=18, size=4, life=0.2)
+            elif name == "Shadow Force":
+                self._spawn_afterimages(7, color=(170, 120, 255), spread=28)
+                self.invincible_timer = max(self.invincible_timer, 0.2)
+            elif name == "Thunderous Kick":
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, YELLOW, count=10, size=3, life=0.18)
+            elif name == "Glacial Lance":
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, (180, 240, 255), count=12, size=4, life=0.26)
+                self.particles.emit_ring(target.x, target.y, WHITE, count=12, speed=110, size=5, life=0.4)
+            self.body.velocity = (ndx * 860, ndy * 260 - 120)
+            self.particles.emit_slash(self.x, self.y, attack_angle, ab.color, size=int(self.size * 2.4), count=16)
+            if dist < ab.range * 1.25:
+                dealt = self._apply_pokemon_hit(target, ab, knockback_x=ndx*520, knockback_y=-300)
+                if name in {"Thunderous Kick", "Glacial Lance"}:
+                    target.stun_timer = max(target.stun_timer, 0.35)
+                if name in {"Behemoth Blade", "Behemoth Bash", "Sunsteel Strike"} and hasattr(self, "battle_ref"):
+                    self.battle_ref.shake = min(20.0, self.battle_ref.shake + 4.5)
+                    self.battle_ref.impact_flash = max(self.battle_ref.impact_flash, 0.06)
+                if name == "Horn Leech":
+                    self.heal(dealt * 0.45)
+            return True
+
+        if name in {"Roar of Time", "Spacial Rend", "Dragon Energy", "Moongeist Beam", "Nature's Madness"}:
+            if name == "Nature's Madness":
+                self.particles.emit_ring(target.x, target.y, ab.color, count=22, speed=160, size=5, life=0.5)
+                if dist < ab.range:
+                    self._apply_pokemon_hit(target, ab, knockback_x=ndx*180, knockback_y=-120)
+                return True
+            if name == "Roar of Time":
+                self.particles.emit_ring(self.x, self.y, (160, 210, 255), count=14, speed=80, size=7, life=0.5)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, (150, 220, 255), count=32, size=5, life=0.34)
+                if hasattr(self, "battle_ref"):
+                    self.battle_ref.impact_flash = max(self.battle_ref.impact_flash, 0.05)
+            elif name == "Spacial Rend":
+                for offset in (-16, 0, 16):
+                    self.particles.emit_beam(self.x - ndy * offset, self.y + ndx * offset,
+                                             target.x - ndy * offset, target.y + ndx * offset,
+                                             PINK, count=12, size=3, life=0.22)
+                self.particles.emit_slash(target.x, target.y, attack_angle + math.pi * 0.5, PINK, size=70, count=10)
+            elif name == "Dragon Energy":
+                self.particles.emit_ring(self.x, self.y, GREEN, count=16, speed=100, size=6, life=0.45)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, GREEN, count=28, size=4, life=0.3)
+            elif name == "Moongeist Beam":
+                self.particles.emit_ring(self.x, self.y, (210, 200, 255), count=10, speed=65, size=7, life=0.4)
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, (190, 180, 255), count=30, size=4, life=0.3)
+            else:
+                self.particles.emit_beam(self.x, self.y, target.x, target.y, ab.color, count=26, size=4, life=0.3)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, knockback_x=ndx*220, knockback_y=-240)
+            return True
+
+        return False
 
     def take_damage(self, dmg, knockback_x=0, knockback_y=-200, attacker=None):
         if self.invincible_timer > 0 or not self.alive:
@@ -1669,6 +3113,16 @@ class Fighter:
         self.invincible_timer = max(0, self.invincible_timer - dt)
         self.stun_timer = max(0, self.stun_timer - dt)
         self.ai_timer  = max(0, self.ai_timer  - dt)
+        self.collision_recover_timer = max(0, self.collision_recover_timer - dt)
+        self.cast_flash_timer = max(0, self.cast_flash_timer - dt)
+        self.cast_ring_timer = max(0, self.cast_ring_timer - dt)
+        updated_afterimages = []
+        for img in self.afterimages:
+            img["life"] -= dt
+            img["y"] -= 10 * dt
+            if img["life"] > 0:
+                updated_afterimages.append(img)
+        self.afterimages = updated_afterimages
         for ab in self.abilities:
             ab.tick(dt)
 
@@ -1897,6 +3351,7 @@ class Fighter:
         dy = target.y - self.y
         dist = max(1, math.hypot(dx, dy))
         ndx, ndy = dx/dist, dy/dist
+        self._trigger_ability_visual(ab, target, ndx, ndy, dist)
 
         # ── DASH FORWARD (Attack Lunge) ──
         if ab.range < 170: # Melee lunge
@@ -1906,6 +3361,9 @@ class Fighter:
             self.particles.emit(self.x + ndx*20, self.y + ndy*20, ab.color, count=8, speed=200, spread=0.5, direction=math.atan2(ndy, ndx))
 
         name = ab.name
+
+        if self._handle_legendary_move(name, ab, target, projectiles, ndx, ndy, dist):
+            return
 
         # ── WARRIOR ──
         if name == "Sword Slash":
@@ -1995,6 +3453,10 @@ class Fighter:
         elif name == "Smoke Bomb":
             self.particles.emit(self.x, self.y, (80,80,80), count=30,
                                speed=120, size=8, life=1.0, gravity=False)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cloud", self.x + ndx*40, self.y, (90,90,100), 3.4,
+                                                 radius=70, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=0.8, interval=0.5)
             if dist < ab.range:
                 target.take_damage(ab.damage, attacker=self)
                 target.stun_timer = 1.0
@@ -2133,6 +3595,10 @@ class Fighter:
                 self.particles.emit(target.x + random.uniform(-40,40),
                                    target.y + random.uniform(-40,40),
                                    CYAN, count=2, speed=100)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("vortex", target.x, target.y, TEAL, 4.5,
+                                                 radius=85, owner_team=self.team, damage=ab.damage,
+                                                 secondary=CYAN, spin=3.8, interval=0.45)
             if dist < ab.range:
                 target.take_damage(ab.damage, knockback_x=ndx*200, knockback_y=-600, attacker=self)
 
@@ -2153,6 +3619,10 @@ class Fighter:
                               YELLOW, 6, self.team, CYAN)
                 p.gravity_affected = False
                 projectiles.append(p)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("field", target.x, target.y, BLUE, 4.8,
+                                                 radius=140, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=2.5, interval=0.55)
 
         # ── VAMPIRE ──
         elif name == "Blood Drain":
@@ -2172,6 +3642,10 @@ class Fighter:
                               math.cos(angle)*300, math.sin(angle)*300,
                               dmg//5, PURPLE, 6, self.team)
                 projectiles.append(p)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, PURPLE, 4.2,
+                                                 radius=75, owner_team=self.team, damage=dmg,
+                                                 secondary=PINK, spin=3.0, interval=0.45)
 
         elif name == "Mist Form":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
@@ -2287,6 +3761,10 @@ class Fighter:
                 p = Projectile(self.x, self.y, math.cos(ang)*600, math.sin(ang)*600,
                               dmg//12, WHITE, 6, self.team, SILVER)
                 projectiles.append(p)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cage", target.x, target.y, WHITE, 4.5,
+                                                 radius=95, owner_team=self.team, damage=dmg,
+                                                 secondary=BLUE, spin=1.6, interval=0.55)
 
         # ── TECH-ARMOR ──
         elif name == "Repulsor":
@@ -2493,6 +3971,15 @@ class Fighter:
             for _ in range(30):
                 self.particles.emit(self.x + ndx*60 + random.uniform(-40,40), self.y + random.uniform(-40,40), 
                                    GREEN, count=1, speed=20, size=8, life=1.5, gravity=False)
+            if hasattr(self, 'battle_ref'):
+                mx = self.x + ndx*70
+                my = self.y + ndy*40
+                self.battle_ref.add_field_effect("mine", mx, my, GREEN, 5.0,
+                                                 radius=68, owner_team=self.team, damage=ab.damage,
+                                                 secondary=LIME, spin=1.2, interval=0.35)
+                self.battle_ref.add_field_effect("cloud", mx, my, GREEN, 3.0,
+                                                 radius=80, owner_team=self.team, damage=ab.damage,
+                                                 secondary=LIME, spin=0.7, interval=0.6)
             if dist < ab.range: target.apply_dot(25, 4.0)
 
         elif name == "Acrobat Strike":
@@ -2563,6 +4050,10 @@ class Fighter:
             for _ in range(20):
                 self.particles.emit(target.x + random.uniform(-50,50), target.y + random.uniform(-50,50), 
                                    WHITE, count=1, speed=150, size=4, life=0.8)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("ritual", target.x, target.y, PURPLE, 4.2,
+                                                 radius=90, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=2.0, interval=0.55)
             target.take_damage(ab.damage, attacker=self)
             target.stun_timer = 2.0
 
@@ -2576,6 +4067,10 @@ class Fighter:
             for _ in range(20):
                 self.particles.emit(self.x + random.uniform(-30,30), self.y + random.uniform(-30,30), 
                                    BLACK, count=2, speed=100, size=3)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, BLACK, 4.4,
+                                                 radius=72, owner_team=self.team, damage=ab.damage,
+                                                 secondary=BROWN, spin=4.6, interval=0.4)
             target.apply_dot(20, 5.0)
 
         elif name == "Giant Stomp":
@@ -2608,6 +4103,10 @@ class Fighter:
             # Massive swirling cyclone
             for i in range(5):
                 self.particles.emit_ring(self.x, self.y, BLUE, count=20, speed=150+i*80, life=1.5, size=10)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("vortex", target.x, target.y, BLUE, 5.2,
+                                                 radius=125, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=4.5, interval=0.4)
             target.take_damage(ab.damage, attacker=self)
 
         # ── OPTIC-HERO ──
@@ -2672,6 +4171,12 @@ class Fighter:
             # Multiple poof rings
             for i in range(5):
                 self.particles.emit_ring(self.x + random.uniform(-150,150), self.y + random.uniform(-50,50), GREEN, count=12, speed=80)
+            if hasattr(self, 'battle_ref'):
+                for i in range(2):
+                    ang = i * math.pi
+                    self.battle_ref.add_field_effect("clone", self.x + math.cos(ang)*65, self.y + math.sin(ang)*30,
+                                                     GREEN, 3.2, owner_team=self.team, damage=ab.damage,
+                                                     secondary=WHITE, spin=1.5, interval=0.9)
 
         elif name == "Scepter Blast":
             p = Projectile(self.x, self.y, ndx*450, ndy*450, ab.damage, BLUE, 10, self.team, GOLD)
@@ -2717,6 +4222,10 @@ class Fighter:
         elif name == "Root Trap":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             self.particles.emit_trap(target.x, target.y, BROWN, size=90)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cage", target.x, target.y, BROWN, 4.0,
+                                                 radius=82, owner_team=self.team, damage=ab.damage,
+                                                 secondary=GREEN, spin=1.0, interval=0.55)
             target.stun_timer = 2.0
 
         elif name == "Spore Heal":
@@ -2785,6 +4294,10 @@ class Fighter:
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             p = Projectile(self.x, self.y, ndx*500, 0, ab.damage, TEAL, 20, self.team, BLUE, piercing=True)
             projectiles.append(p)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, TEAL, 3.8,
+                                                 radius=78, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=2.4, interval=0.4)
 
         elif name == "Ocean Wrath":
             self.particles.emit_ring(target.x, target.y, BLUE, count=40, speed=300)
@@ -2883,7 +4396,10 @@ class Fighter:
         elif name == "Earthquake":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('thud')
             self.particles.emit_ring(self.x, self.y, SILVER, count=30, speed=350)
-            target.stun_timer = 1.5
+            self._spawn_quake_zone(self.x, self.y, BROWN, ab.damage, life=1.05, radius=150)
+            if dist < ab.range * 1.4:
+                target.take_damage(self._ability_damage(ab), ndx*500, -260, attacker=self)
+                target.stun_timer = 1.2
 
         elif name == "Boulder Throw":
             p = Projectile(self.x, self.y, ndx*400, -300, ab.damage, BROWN, 30, self.team, SILVER)
@@ -2947,6 +4463,10 @@ class Fighter:
         elif name == "Horde Call":
             for _ in range(5):
                 self.particles.emit(self.x + random.uniform(-50,50), self.y, BROWN, count=5)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, BROWN, 4.8,
+                                                 radius=88, owner_team=self.team, damage=ab.damage,
+                                                 secondary=GREEN, spin=3.2, interval=0.4)
             target.take_damage(ab.damage, attacker=self)
 
         elif name == "Undead Rage":
@@ -2971,6 +4491,11 @@ class Fighter:
                 px = random.uniform(50, WIDTH-50)
                 p = Projectile(px, -50, 0, 700, ab.damage//12, LIME, 8, self.team)
                 projectiles.append(p)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("mothership", target.x, 90, LIME, 5.2,
+                                                 owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=1.1, interval=0.55,
+                                                 target_x=target.x)
 
         # ── PIRATE-KING ──
         elif name == "Scimitar":
@@ -2987,6 +4512,13 @@ class Fighter:
 
         elif name == "Kraken":
             self.particles.emit_ring(target.x, target.y, BLUE, count=50, speed=300, size=15)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, BLUE, 4.6,
+                                                 radius=110, owner_team=self.team, damage=ab.damage,
+                                                 secondary=TEAL, spin=1.9, interval=0.4)
+                self.battle_ref.add_field_effect("field", target.x, target.y, TEAL, 3.8,
+                                                 radius=105, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=1.3, interval=0.5)
             target.take_damage(ab.damage, 0, -800, attacker=self)
 
         # ── SHADOW-KNIGHT ──
@@ -3048,6 +4580,10 @@ class Fighter:
         elif name == "Slow Field":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             self.particles.emit_ring(target.x, target.y, YELLOW, count=30, speed=80, size=6, life=1.5)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("field", target.x, target.y, YELLOW, 4.0,
+                                                 radius=88, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=1.8, interval=0.45)
             if dist < ab.range:
                 target.take_damage(ab.damage, attacker=self)
                 target.stun_timer = 2.0  # "Slow" = stun
@@ -3083,6 +4619,10 @@ class Fighter:
             for _ in range(20):
                 self.particles.emit(target.x + random.uniform(-80,80), target.y + random.uniform(-40,40),
                                    LIME, count=2, speed=30, size=10, life=2.0, gravity=False)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cloud", target.x, target.y, LIME, 5.0,
+                                                 radius=105, owner_team=self.team, damage=ab.damage,
+                                                 secondary=GREEN, spin=0.8, interval=0.45)
             if dist < ab.range:
                 target.take_damage(ab.damage, attacker=self)
                 target.apply_dot(20, 5.0)
@@ -3094,6 +4634,10 @@ class Fighter:
                 p = Projectile(self.x, self.y, math.cos(angle)*400, math.sin(angle)*400,
                               ab.damage//12, (80,200,80), 8, self.team, LIME, aoe_radius=25)
                 projectiles.append(p)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, (80,200,80), 5.0,
+                                                 radius=95, owner_team=self.team, damage=ab.damage,
+                                                 secondary=LIME, spin=2.7, interval=0.4)
 
         # ── MIRROR-MAGE ──
         elif name == "Mirror Shard":
@@ -3115,6 +4659,11 @@ class Fighter:
                 off = [(100, -80), (-100, -80), (0, -130)][i]
                 self.particles.emit_ring(self.x + off[0], self.y + off[1],
                                         SILVER, count=20, speed=100, size=6)
+            if hasattr(self, 'battle_ref'):
+                for ox, oy in [(100, -80), (-100, -80), (0, -130)]:
+                    self.battle_ref.add_field_effect("clone", self.x + ox, self.y + oy, SILVER, 3.6,
+                                                     owner_team=self.team, damage=ab.damage,
+                                                     secondary=WHITE, spin=1.2, interval=0.8)
             if dist < ab.range: target.take_damage(ab.damage, ndx*200, attacker=self)
             target.stun_timer = 1.0
 
@@ -3133,6 +4682,10 @@ class Fighter:
                 pull_y = (self.y - target.y)
                 target.body.velocity = (target.body.velocity.x + pull_x*3, target.body.velocity.y + pull_y*3)
                 self.particles.emit_beam(self.x, self.y, target.x, target.y, PURPLE, count=15)
+                if hasattr(self, 'battle_ref'):
+                    self.battle_ref.add_field_effect("vortex", (self.x + target.x) / 2, (self.y + target.y) / 2,
+                                                     PURPLE, 2.8, radius=68, owner_team=self.team,
+                                                     damage=ab.damage, secondary=BLACK, spin=3.4, interval=0.35)
                 target.take_damage(ab.damage, attacker=self)
 
         elif name == "Event Horizon":
@@ -3150,6 +4703,10 @@ class Fighter:
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             self.particles.emit_ring(self.x, self.y, BLACK, count=60, speed=600, size=15)
             self.particles.emit_ring(self.x, self.y, PURPLE, count=40, speed=300, size=10)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("vortex", target.x, target.y, BLACK, 4.8,
+                                                 radius=118, owner_team=self.team, damage=ab.damage,
+                                                 secondary=PURPLE, spin=5.0, interval=0.35)
             for _ in range(3):
                 target.take_damage(ab.damage//3, (self.x-target.x)*2, (self.y-target.y)*2, attacker=self)
 
@@ -3246,6 +4803,10 @@ class Fighter:
             p = Projectile(mx, my, 0, 0, ab.damage, ORANGE, 12, self.team, RED, aoe_radius=80)
             projectiles.append(p)
             self.particles.emit_ring(mx, my, ORANGE, count=15, speed=50, size=6)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("mine", mx, my, ORANGE, 4.4,
+                                                 radius=85, owner_team=self.team, damage=ab.damage,
+                                                 secondary=RED, spin=1.4, interval=0.3)
 
         elif name == "Headshot":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
@@ -3275,6 +4836,10 @@ class Fighter:
         elif name == "Crystal Cage":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             self.particles.emit_trap(target.x, target.y, (180,80,220), size=80, count=20)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cage", target.x, target.y, (180,80,220), 4.6,
+                                                 radius=92, owner_team=self.team, damage=ab.damage,
+                                                 secondary=WHITE, spin=1.5, interval=0.5)
             if dist < ab.range:
                 target.take_damage(ab.damage, attacker=self)
                 target.stun_timer = 2.5
@@ -3283,6 +4848,10 @@ class Fighter:
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             self.take_damage(self.max_hp * 0.15)  # Self-sacrifice
             self.particles.emit_ring(self.x, self.y, (100,0,150), count=50, speed=400, size=12)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("ritual", self.x, self.y, (100,0,150), 5.0,
+                                                 radius=110, owner_team=self.team, damage=ab.damage,
+                                                 secondary=PINK, spin=2.8, interval=0.45)
             target.take_damage(ab.damage, ndx*500, -400, attacker=self)
             target.apply_dot(25, 5.0)
 
@@ -3301,6 +4870,10 @@ class Fighter:
         elif name == "Eruption":
             if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
             self.particles.emit_ring(self.x, self.y, GOLD, count=30, speed=300, size=12)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("field", self.x, self.y, ORANGE, 3.6,
+                                                 radius=130, owner_team=self.team, damage=ab.damage,
+                                                 secondary=RED, spin=2.0, interval=0.4)
             for _ in range(6):
                 px = self.x + random.uniform(-120,120)
                 p = Projectile(px, -30, 0, 600, ab.damage//6, ORANGE, 10, self.team, RED)
@@ -3441,6 +5014,10 @@ class Fighter:
                 ty = self.y + ndy*80
                 self.particles.emit_ring(tx, ty, SILVER, count=20, speed=60, size=6)
                 self.particles.emit(tx, ty, (180,130,60), count=15, speed=30, size=8, gravity=False)
+                self.battle_ref.add_field_effect("turret", tx, ty, SILVER, 5.5,
+                                                 owner_team=self.team, damage=ab.damage,
+                                                 secondary=GOLD, spin=1.3, interval=0.55,
+                                                 angle=math.atan2(ndy, ndx))
                 # Turret fires a burst of bullets in enemy direction
                 for i in range(8):
                     spread = random.uniform(-0.15, 0.15)
@@ -3494,8 +5071,10 @@ class Fighter:
                 wall.elasticity = 0.6; wall.friction = 0.5
                 wall.collision_type = 0
                 br.space.add(wall)
-                if not hasattr(br, 'temp_walls'): br.temp_walls = []
                 br.temp_walls.append((wall, 8.0))  # (wall, lifetime seconds)
+                br.add_field_effect("wall", wx, wy, (120,100,80), 8.0,
+                                    owner_team=self.team, secondary=SILVER,
+                                    angle=math.atan2(perp_y, perp_x), length=w_len, shape=wall)
                 # Visual effect
                 for i in range(5):
                     self.particles.emit(wx + perp_x*i*25, wy + perp_y*i*25,
@@ -3546,6 +5125,9 @@ class Fighter:
                 cy = self.y + random.uniform(-40, 40)
                 self.particles.emit_ring(cx, cy, TEAL, count=25, speed=100, size=7)
                 self.particles.emit_ring(cx, cy, CYAN, count=15, speed=40, size=10)
+                br.add_field_effect("clone", cx, cy, TEAL, 4.0,
+                                    owner_team=self.team, damage=ab.damage,
+                                    secondary=CYAN, spin=1.8, interval=0.7)
                 # Clone fires a burst at the target
                 for _ in range(4):
                     spread = random.uniform(-0.2, 0.2)
@@ -3576,6 +5158,9 @@ class Fighter:
                 for off in offsets:
                     cx = self.x + off[0]; cy = self.y + off[1]
                     self.particles.emit_ring(cx, cy, CYAN, count=20, speed=80, size=6)
+                    br.add_field_effect("clone", cx, cy, TEAL, 4.2,
+                                        owner_team=self.team, damage=ab.damage,
+                                        secondary=WHITE, spin=1.4, interval=0.75)
                     # Each clone fires homing burst
                     angle = math.atan2(target.y-cy, target.x-cx)
                     for _ in range(3):
@@ -3585,6 +5170,239 @@ class Fighter:
                                       math.sin(angle+spread)*500,
                                       ab.damage//12, TEAL, 7, self.team, CYAN, homing=True)
                         br.projectiles.append(p)
+
+        # ── POKEMON MOVES ──
+        elif name == "Solar Beam":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_ring(self.x, self.y, YELLOW, count=28, speed=110, size=7, life=0.7)
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, GREEN, count=35, size=5, life=0.35)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("field", self.x, self.y, YELLOW, 1.4,
+                                                 radius=85, owner_team=self.team, damage=ab.damage * 0.5,
+                                                 secondary=GREEN, spin=1.2, interval=0.5)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*650, -220)
+
+        elif name == "Sludge Bomb":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            p = self._spawn_ability_projectile(projectiles, ab, ndx*360, ndy*360-120, PURPLE, 10, trail=PINK, aoe_radius=85, target=target)
+            p.gravity_affected = True
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cloud", target.x, target.y, PURPLE, 3.8,
+                                                 radius=90, owner_team=self.team, damage=ab.damage,
+                                                 secondary=PINK, spin=0.9, interval=0.5)
+
+        elif name == "Energy Ball":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self._spawn_ability_projectile(projectiles, ab, ndx*520, ndy*520, GREEN, 8, trail=LIME, target=target)
+
+        elif name == "Flamethrower":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            for i in range(10):
+                fx = self.x + ndx * (40 + i * 24) + random.uniform(-8, 8)
+                fy = self.y + ndy * (40 + i * 24) + random.uniform(-8, 8)
+                self.particles.emit(fx, fy, ORANGE, count=2, speed=45, size=6, life=0.5, gravity=False)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*280, -100)
+                target.apply_dot(18, 2.2)
+
+        elif name == "Fire Blast":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self._spawn_ability_projectile(projectiles, ab, ndx*430, ndy*430, ORANGE, 12, trail=RED, aoe_radius=95, target=target)
+
+        elif name == "Air Slash":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('slash')
+            for offset in (-0.12, 0.12):
+                ang = math.atan2(ndy, ndx) + offset
+                p = Projectile(self.x, self.y, math.cos(ang)*560, math.sin(ang)*560, self._ability_damage(ab, scale=0.5, target=target), WHITE, 6, self.team, CYAN, piercing=True, owner=self)
+                projectiles.append(p)
+
+        elif name == "Dragon Claw":
+            self.particles.emit_slash(target.x, target.y, math.atan2(ndy, ndx), CYAN, size=50, count=10)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*420, -260)
+
+        elif name == "Hydro Pump":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, CYAN, count=28, size=5, life=0.28)
+            p = self._spawn_ability_projectile(projectiles, ab, ndx*620, ndy*620, CYAN, 10, trail=BLUE, aoe_radius=40, target=target)
+            p.gravity_affected = False
+
+        elif name == "Surf":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("field", target.x, target.y, BLUE, 3.6,
+                                                 radius=120, owner_team=self.team, damage=ab.damage,
+                                                 secondary=CYAN, spin=1.1, interval=0.45)
+            for i in range(5):
+                self.particles.emit(self.x + ndx*i*55, self.y + math.sin(i * 0.8) * 6, BLUE, count=8, speed=140, size=10)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*700, -220)
+
+        elif name == "Ice Beam":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, WHITE, count=24, size=4, life=0.25)
+            p = Projectile(self.x, self.y, ndx*580, ndy*580, self._ability_damage(ab, target=target), WHITE, 7, self.team, CYAN, piercing=True, owner=self)
+            projectiles.append(p)
+            if dist < ab.range:
+                target.stun_timer = max(target.stun_timer, 0.45)
+
+        elif name == "Dark Pulse":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self._spawn_ability_projectile(projectiles, ab, ndx*450, ndy*450, PURPLE, 10, trail=BLACK, aoe_radius=55, target=target)
+
+        elif name == "Giga Drain":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('heal')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, GREEN, count=18, size=4, life=0.35)
+            if dist < ab.range:
+                stolen = self._apply_pokemon_hit(target, ab, ndx*160, scale=1.0)
+                self.heal(stolen * 0.45)
+
+        elif name == "Body Slam":
+            self.body.velocity = (ndx*900, -180)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*620, -220)
+
+        elif name == "Focus Blast":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self._spawn_ability_projectile(projectiles, ab, ndx*360, ndy*360, GOLD, 14, trail=ORANGE, homing=True, aoe_radius=100, target=target)
+
+        elif name == "Waterfall":
+            self.particles.emit_ring(self.x, self.y, CYAN, count=18, speed=140, size=6)
+            self.body.velocity = (ndx*420, -720)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*420, -520)
+
+        elif name == "Ice Punch":
+            self.particles.emit(target.x, target.y, WHITE, count=12, speed=180)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*280, -180)
+                target.stun_timer = max(target.stun_timer, 0.6)
+
+        elif name == "Crunch":
+            self.particles.emit_beam(target.x-20, target.y-18, target.x+18, target.y+18, PURPLE, count=10, life=0.15)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*320)
+
+        elif name == "Leaf Blade":
+            self.particles.emit_slash(self.x, self.y, math.atan2(ndy, ndx), GREEN, size=52, count=12)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*360, -180)
+
+        elif name == "Dragon Pulse":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self._spawn_ability_projectile(projectiles, ab, ndx*470, ndy*470, CYAN, 9, trail=PURPLE, aoe_radius=45, target=target)
+
+        elif name == "Flare Blitz":
+            self.body.velocity = (ndx*1100, ndy*160)
+            self.particles.emit_ring(self.x, self.y, ORANGE, count=22, speed=170, size=7)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*720, -260)
+                self.take_damage(ab.damage * 0.12)
+
+        elif name == "Blaze Kick":
+            self.body.velocity = (ndx*720, -260)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*460, -320)
+                target.apply_dot(10, 1.5)
+
+        elif name == "High Jump Kick":
+            self.body.velocity = (ndx*780, -620)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*760, -500)
+            else:
+                self.take_damage(ab.damage * 0.08)
+
+        elif name == "Brave Bird":
+            self.body.velocity = (ndx*980, ndy*260 - 120)
+            if dist < ab.range * 1.2:
+                self._apply_pokemon_hit(target, ab, ndx*680, -260)
+                self.take_damage(ab.damage * 0.1)
+
+        elif name == "Wood Hammer":
+            self.particles.emit_ring(self.x, self.y, GREEN, count=20, speed=150, size=8)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*650, -260)
+                self.take_damage(ab.damage * 0.08)
+
+        elif name == "Stone Edge":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('thud')
+            for i in range(5):
+                px = target.x + (i-2) * 26
+                self.particles.emit(px, target.y + 30, SILVER, count=8, speed=180, size=8)
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("cage", target.x, target.y + 10, SILVER, 2.2,
+                                                 radius=70, owner_team=self.team, damage=ab.damage * 0.7,
+                                                 secondary=BROWN, spin=0.9, interval=0.5)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, 0, -460)
+
+        elif name == "Close Combat":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('slash')
+            for _ in range(4):
+                if dist < ab.range:
+                    self._apply_pokemon_hit(target, ab, ndx*180, scale=0.25)
+            self.body.velocity = (self.body.velocity.x + ndx*120, self.body.velocity.y)
+
+        elif name == "Mach Punch":
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*220)
+                target.stun_timer = max(target.stun_timer, 0.2)
+
+        elif name == "Flash Cannon":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, SILVER, count=24, size=4, life=0.22)
+            self._spawn_ability_projectile(projectiles, ab, ndx*540, ndy*540, SILVER, 8, trail=WHITE, target=target)
+
+        elif name == "Leaf Storm":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            if hasattr(self, 'battle_ref'):
+                self.battle_ref.add_field_effect("swarm", target.x, target.y, GREEN, 4.6,
+                                                 radius=110, owner_team=self.team, damage=ab.damage,
+                                                 secondary=LIME, spin=4.2, interval=0.35)
+            for _ in range(12):
+                ang = random.uniform(0, math.pi*2)
+                p = Projectile(target.x, target.y, math.cos(ang)*360, math.sin(ang)*360, self._ability_damage(ab, scale=1/12, target=target), GREEN, 5, self.team, LIME, owner=self)
+                projectiles.append(p)
+
+        elif name == "Heat Crash":
+            self.body.velocity = (ndx*820, -120)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*700, -180)
+                target.apply_dot(12, 1.6)
+
+        elif name == "Hammer Arm":
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*620, -260)
+                target.stun_timer = max(target.stun_timer, 0.45)
+
+        elif name == "Wild Charge":
+            self.body.velocity = (ndx*960, ndy*120)
+            self.particles.emit_ring(self.x, self.y, YELLOW, count=16, speed=160, size=6)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*620, -220)
+                self.take_damage(ab.damage * 0.1)
+
+        elif name == "Megahorn":
+            self.body.velocity = (ndx*900, -120)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, ndx*700, -240)
+
+        elif name == "Drain Punch":
+            if dist < ab.range:
+                stolen = self._apply_pokemon_hit(target, ab, ndx*280)
+                self.heal(stolen * 0.5)
+
+        elif name == "Psychic":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('special')
+            self.particles.emit_beam(self.x, self.y, target.x, target.y, PINK, count=18, size=4, life=0.3)
+            if dist < ab.range:
+                self._apply_pokemon_hit(target, ab, 0, -260)
+                target.stun_timer = max(target.stun_timer, 0.55)
+
+        elif name == "Shadow Ball":
+            if hasattr(self, 'battle_ref'): self.battle_ref.sounds.play('shoot')
+            self._spawn_ability_projectile(projectiles, ab, ndx*420, ndy*420, PURPLE, 11, trail=BLACK, homing=True, aoe_radius=55, target=target)
 
         # ── RECOIL / BACK-DASH (Tactical Retreat) ──
         # Move back after hit / ability use
@@ -3606,9 +5424,37 @@ class Fighter:
         x, y = int(self.x), int(self.y)
         s = self.size
 
+        for img in self.afterimages:
+            alpha = max(0.0, img["life"] / img["max_life"])
+            ghost = pygame.Surface((int(img["size"] * 4), int(img["size"] * 4)), pygame.SRCALPHA)
+            color = (*img["color"], int(80 * alpha))
+            rect = (
+                int(img["size"]),
+                int(img["size"] * 1.2),
+                int(img["size"] * 2),
+                int(img["size"] * 1.45),
+            )
+            pygame.draw.ellipse(ghost, color, rect)
+            screen.blit(ghost, (img["x"] - img["size"] * 2, img["y"] - img["size"] * 2))
+
+        if self.cast_ring_timer > 0:
+            alpha = self.cast_ring_timer / 0.6
+            aura_radius = int(s * (1.8 + (1 - alpha) * 1.4))
+            aura = pygame.Surface((aura_radius * 4, aura_radius * 4), pygame.SRCALPHA)
+            center = aura_radius * 2
+            pygame.draw.circle(aura, (*self.cast_color, int(55 * alpha)), (center, center), aura_radius, max(2, int(4 * alpha)))
+            pygame.draw.circle(aura, (*self.cast_accent, int(35 * alpha)), (center, center), max(8, aura_radius - 10), 2)
+            screen.blit(aura, (x - center, y - center))
+
+        self._draw_ambient_fx(screen, x, y, s)
+
         # Flash white on hit
         draw_color = WHITE if self.hit_flash > 0 else self.color
         body_draw  = WHITE if self.hit_flash > 0 else self.body_color
+        if self.cast_flash_timer > 0:
+            cast_blend = min(1.0, self.cast_flash_timer / 0.35)
+            draw_color = self._mix_color(draw_color, self.cast_color, 0.35 * cast_blend)
+            body_draw = self._mix_color(body_draw, self.cast_accent, 0.45 * cast_blend)
 
         # ── ANIMATIC EFFECTS ──
         # Squash & Stretch based on velocity
@@ -3626,10 +5472,23 @@ class Fighter:
         pygame.draw.ellipse(shadow_surf, (0,0,0,40), (s*2 - int(s*stretch), s*2 - int(s*squash) + 4, int(s*2*stretch), int(s*2*squash)))
         screen.blit(shadow_surf, (x - s*2 + hx, y - s*2 + hy))
 
-        # Body (main circle)
+        # Body (main circle or sprite)
         rect = (x - int(s*stretch) + hx, y - int(s*squash) + hy, int(s*2*stretch), int(s*2*squash))
-        pygame.draw.ellipse(screen, body_draw, rect)
-        pygame.draw.ellipse(screen, draw_color, rect, 2)
+        if self.sprite is not None:
+            sprite_w = max(28, int(s * 3.0 * stretch))
+            sprite_h = max(28, int(s * 3.0 * squash))
+            sprite = pygame.transform.smoothscale(self.sprite, (sprite_w, sprite_h))
+            screen.blit(sprite, (x - sprite_w//2 + hx, y - sprite_h//2 + hy))
+            if self.hit_flash > 0:
+                pygame.draw.ellipse(screen, WHITE, rect, 3)
+        else:
+            pygame.draw.ellipse(screen, body_draw, rect)
+            pygame.draw.ellipse(screen, draw_color, rect, 2)
+            self._draw_pokemon_details(screen, x, y, s, body_draw, draw_color)
+
+        if self.cast_flash_timer > 0:
+            pulse_w = max(2, int(5 * (self.cast_flash_timer / 0.35)))
+            pygame.draw.ellipse(screen, self.cast_color, (rect[0] - 3, rect[1] - 3, rect[2] + 6, rect[3] + 6), pulse_w)
 
         # Eyes
         eye_x = x + self.facing * (s*0.4) + hx
@@ -3639,61 +5498,95 @@ class Fighter:
 
         # ── DRAW WEAPON ──
         w_color = (180, 180, 180) # Default steel
+        attack_phase = 0.0
+        if self.cast_flash_timer > 0:
+            attack_phase = min(1.0, self.cast_flash_timer / 0.35)
+        swing = math.sin(attack_phase * math.pi)
+        thrust = attack_phase * (2.0 - attack_phase)
+        weapon_glow = self.cast_color if self.cast_flash_timer > 0 else self.color
         if self.weapon_type == "sword":
-            # Simple sword
-            sword_len = s * 1.5
-            start = (x + self.facing * s, y + s//2)
-            end = (x + self.facing * (s + sword_len), y - s//2)
+            sword_len = s * (1.5 + thrust * 0.25)
+            lift = swing * s * 0.8
+            start = (x + self.facing * (s - 2), y + s//2 - lift * 0.2)
+            end = (x + self.facing * (s + sword_len), y - s//2 - lift)
             pygame.draw.line(screen, w_color, start, end, 4)
             pygame.draw.line(screen, (100, 100, 100), start, (x + self.facing * (s + 5), y + s//2 + 5), 6) # hilt
+            if self.cast_flash_timer > 0:
+                pygame.draw.line(screen, weapon_glow, start, end, 2)
         elif self.weapon_type == "staff":
             staff_len = s * 2.0
-            start = (x + self.facing * s, y + s)
-            end = (x + self.facing * s, y - s)
+            sway = math.sin(pygame.time.get_ticks()*0.012 + self.ambient_phase) * 3 + swing * 6
+            start = (x + self.facing * s + sway, y + s)
+            end = (x + self.facing * s - sway, y - s - thrust * 6)
             pygame.draw.line(screen, (100, 70, 30), start, end, 3)
             pygame.draw.circle(screen, self.color, end, 5) # Gem
+            if self.cast_flash_timer > 0:
+                pygame.draw.circle(screen, weapon_glow, end, 7, 2)
         elif self.weapon_type == "katana":
-            sword_len = s * 1.8
-            start = (x + self.facing * s, y + s//4)
-            end = (x + self.facing * (s + sword_len), y - s//4)
+            sword_len = s * (1.8 + thrust * 0.2)
+            slash_rise = swing * s * 0.65
+            start = (x + self.facing * s, y + s//4 - slash_rise * 0.15)
+            end = (x + self.facing * (s + sword_len), y - s//4 - slash_rise)
             pygame.draw.line(screen, (220, 220, 230), start, end, 2)
+            if self.cast_flash_timer > 0:
+                pygame.draw.line(screen, weapon_glow, start, end, 1)
         elif self.weapon_type == "blaster":
             b_w, b_h = s, s//2
-            bx = x + self.facing * s - (b_w if self.facing == -1 else 0)
-            by = y - b_h//2
+            recoil = thrust * 8
+            bx = x + self.facing * (s - recoil) - (b_w if self.facing == -1 else 0)
+            by = y - b_h//2 + math.sin(pygame.time.get_ticks()*0.03 + self.ambient_phase) * 1.5
             pygame.draw.rect(screen, (80, 80, 90), (bx, by, b_w, b_h), border_radius=2)
             pygame.draw.rect(screen, CYAN, (bx + (b_w-4 if self.facing == 1 else 0), by + 2, 4, b_h-4)) # Energy glow
+            if self.cast_flash_timer > 0:
+                muzzle_x = bx + (b_w if self.facing == 1 else 0)
+                pygame.draw.circle(screen, weapon_glow, (int(muzzle_x), int(by + b_h//2)), 5, 2)
         elif self.weapon_type == "bow":
-            arc_rect = (x + self.facing * s - s, y - s, s*2, s*2)
+            pull = thrust * 10
+            arc_rect = (x + self.facing * (s - pull*0.2) - s, y - s - swing * 4, s*2, s*2)
             start_angle = -math.pi/2 if self.facing == 1 else math.pi/2
             pygame.draw.arc(screen, (120, 80, 40), arc_rect, start_angle, start_angle + math.pi, 2)
+            string_x = x - self.facing * pull * 0.7
+            pygame.draw.line(screen, weapon_glow if self.cast_flash_timer > 0 else WHITE,
+                             (int(string_x), int(y - s)), (int(string_x), int(y + s)), 1)
         elif self.weapon_type == "trident":
             staff_len = s * 1.8
-            start = (x + self.facing * s, y + s)
-            end = (x + self.facing * s, y - s)
+            jab = thrust * 12
+            start = (x + self.facing * (s - jab*0.2), y + s)
+            end = (x + self.facing * (s + jab), y - s - swing * 4)
             pygame.draw.line(screen, (150, 150, 160), start, end, 3)
             # Prongs
             pygame.draw.line(screen, (150, 150, 160), end, (end[0]-5, end[1]-8), 2)
             pygame.draw.line(screen, (150, 150, 160), end, (end[0]+5, end[1]-8), 2)
             pygame.draw.line(screen, (150, 150, 160), end, (end[0], end[1]-12), 2)
+            if self.cast_flash_timer > 0:
+                pygame.draw.circle(screen, weapon_glow, (int(end[0]), int(end[1]-4)), 6, 2)
         elif self.weapon_type == "claws":
             for i in range(3):
                 off = (i-1)*5
-                pygame.draw.line(screen, WHITE, (x + self.facing*s, y + off), (x + self.facing*(s+10), y + off - 5), 2)
+                reach = 10 + thrust * 8
+                rise = swing * 6
+                pygame.draw.line(screen, WHITE, (x + self.facing*s, y + off), (x + self.facing*(s+reach), y + off - 5 - rise), 2)
         elif self.weapon_type == "hammer":
             staff_len = s * 1.5
+            smash = swing * 10
             start = (x + self.facing * s, y + s)
-            end = (x + self.facing * s, y - s)
+            end = (x + self.facing * (s + thrust*5), y - s + smash)
             pygame.draw.line(screen, (120, 90, 50), start, end, 5) # Handle
             # Hammer head
             pygame.draw.rect(screen, (100, 100, 110), (end[0]-10, end[1]-5, 20, 15))
+            if self.cast_flash_timer > 0:
+                pygame.draw.rect(screen, weapon_glow, (end[0]-12, end[1]-7, 24, 19), 2)
         elif self.weapon_type == "chain":
-            start = (x + self.facing * s, y)
+            start = (x + self.facing * s, y - swing * 3)
             for i in range(5):
-                cx_ = start[0] + self.facing * i * 6
-                cy_ = start[1] + math.sin(pygame.time.get_ticks()*0.01 + i)*5
+                cx_ = start[0] + self.facing * i * (6 + thrust * 2)
+                cy_ = start[1] + math.sin(pygame.time.get_ticks()*0.01 + i + attack_phase*4)*5
                 pygame.draw.circle(screen, (150, 150, 160), (int(cx_), int(cy_)), 3, 1)
-            pygame.draw.circle(screen, RED, (int(start[0] + self.facing*30), int(start[1])), 5) # Weighted end
+            ball_x = start[0] + self.facing*(30 + thrust * 10)
+            ball_y = start[1] - swing * 4
+            pygame.draw.circle(screen, RED, (int(ball_x), int(ball_y)), 5) # Weighted end
+            if self.cast_flash_timer > 0:
+                pygame.draw.circle(screen, weapon_glow, (int(ball_x), int(ball_y)), 8, 2)
         
         # ── DRAW SHIELD ──
         if self.has_shield:
@@ -3702,6 +5595,14 @@ class Fighter:
             shy = y - sh_h//2
             pygame.draw.rect(screen, (150, 160, 170), (shx, shy, sh_w, sh_h), border_radius=4)
             pygame.draw.rect(screen, SILVER, (shx+2, shy+2, sh_w-4, sh_h-4), border_radius=2)
+
+        if self.cast_ring_timer > 0:
+            tip_angle = pygame.time.get_ticks() * 0.01
+            for i in range(3):
+                ang = tip_angle + i * (math.pi * 2 / 3)
+                orb_x = x + math.cos(ang) * (s + 10)
+                orb_y = y + math.sin(ang) * (s + 10)
+                pygame.draw.circle(screen, self.cast_accent, (int(orb_x), int(orb_y)), 3)
 
         # Stun stars
         if self.stun_timer > 0:
@@ -3792,6 +5693,9 @@ class Battle:
         self.time_up = False     # True when battle ended by timer
         self.time_up_winner_team = -1
         self.time_up_judgment = []  # List of strings explaining the judgment
+        self.field_effects: List[BattlefieldEffect] = []
+        self.temp_walls = []
+        self.active_clones = []
 
         # ── ARENA GENERATION ──
         self.arena_size = 440
@@ -3877,16 +5781,28 @@ class Battle:
             f1 = getattr(s1, 'fighter', None)
             f2 = getattr(s2, 'fighter', None)
             if f1 and f2:
+                if f1.stun_timer > 0 or f2.stun_timer > 0:
+                    return True
+                if f1.collision_recover_timer > 0 or f2.collision_recover_timer > 0:
+                    return True
                 # Add a tactical 'bounce' between fighters
                 dx, dy = f1.x - f2.x, f1.y - f2.y
                 dist = math.hypot(dx, dy) or 1
                 ndx, ndy = dx/dist, dy/dist
                 # Bump force proportional to impact but with a base minimum
-                force = 180 + min(arbiter.total_impulse.length * 0.1, 400)
-                f1.body.velocity = (f1.body.velocity.x + ndx*force, f1.body.velocity.y + ndy*force*0.5)
-                f2.body.velocity = (f2.body.velocity.x - ndx*force, f2.body.velocity.y - ndy*force*0.5)
+                force = 260 + min(arbiter.total_impulse.length * 0.12, 480)
+                f1.body.velocity = (f1.body.velocity.x + ndx*force, f1.body.velocity.y + ndy*force*0.7 - 80)
+                f2.body.velocity = (f2.body.velocity.x - ndx*force, f2.body.velocity.y - ndy*force*0.7 - 80)
+                f1.collision_recover_timer = 0.38
+                f2.collision_recover_timer = 0.38
+                f1.ai_state = "scramble"
+                f2.ai_state = "scramble"
+                f1.ai_timer = max(f1.ai_timer, 0.22)
+                f2.ai_timer = max(f2.ai_timer, 0.22)
                 # Visual sparks on impact
                 f1.particles.emit(f1.x, f1.y, WHITE, count=4, speed=60)
+                f2.particles.emit(f2.x, f2.y, WHITE, count=4, speed=60)
+                f1.particles.emit_ring((f1.x + f2.x) * 0.5, (f1.y + f2.y) * 0.5, SILVER, count=8, speed=120, size=4, life=0.25)
             if arbiter.total_impulse.length > 500:
                 self.sounds.play('thud')
             return True
@@ -3937,6 +5853,11 @@ class Battle:
             if team_a_f: self.team_priorities[1] = random.choice(team_a_f)
 
         self.elapsed = 0.0
+
+    def add_field_effect(self, effect_type, x, y, color, life, **kwargs):
+        eff = BattlefieldEffect(effect_type, x, y, color, life, **kwargs)
+        self.field_effects.append(eff)
+        return eff
 
     def get_team(self, team_id):
         return [f for f in self.fighters if f.team == team_id and f.alive]
@@ -3991,7 +5912,7 @@ class Battle:
         self.elapsed += dt
 
         # ── ARCHITECT TEMP WALL LIFETIME ──
-        if hasattr(self, 'temp_walls') and self.temp_walls:
+        if self.temp_walls:
             surviving = []
             for w, lifetime in self.temp_walls:
                 remaining = lifetime - dt
@@ -4006,7 +5927,7 @@ class Battle:
             self.temp_walls = surviving
 
         # ── CLONE MASTER ACTIVE CLONE CLEANUP ──
-        if hasattr(self, 'active_clones'):
+        if self.active_clones:
             t_now = pygame.time.get_ticks() / 1000.0
             self.active_clones = [(cx, cy, col, born, lt) for cx, cy, col, born, lt in self.active_clones
                                   if t_now - born < lt]
@@ -4056,6 +5977,12 @@ class Battle:
         self.powerups = new_pu
 
         alive_fighters = [f for f in self.fighters if f.alive]
+
+        updated_effects = []
+        for effect in self.field_effects:
+            if effect.update(dt, self, alive_fighters, self.projectiles):
+                updated_effects.append(effect)
+        self.field_effects = updated_effects
 
         for f in self.fighters:
             if not f.alive:
@@ -4283,6 +6210,9 @@ class Battle:
             for y in range(int(r.top), int(r.bottom)+1, 120):
                 pygame.draw.line(canvas, (30, 35, 45), (r.left + self.shake_off()[0], y + self.shake_off()[1]), (r.right + self.shake_off()[0], y + self.shake_off()[1]))
             pygame.draw.rect(canvas, (50, 60, 80), (r.left + self.shake_off()[0], r.top + self.shake_off()[1], r.width, r.height), 2)
+
+        for effect in self.field_effects:
+            effect.draw(canvas, self)
             
         # ── 1V1 VS HEADER ──
         if len(self.fighters) == 2 and not self.is_br:
@@ -4623,7 +6553,9 @@ class Menu:
         self.arenas = ["STADIUM", "NEXUS", "OCTAGON", "PILLARS"]
         self.arena_idx = 0
 
-        self.chars = list(CHARACTER_DATA.keys())
+        self.char_tabs = ["Original", "Pokemon", "Legendary"]
+        self.char_tab_idx = 0
+        self.chars = list(ORIGINAL_CHARACTER_NAMES)
         self.selected_a: List[str] = []
         self.selected_b: List[str] = []
         self.selecting_team = 0   # 0 = team A, 1 = team B
@@ -4635,6 +6567,15 @@ class Menu:
         self.bg_timer = 0.0
         self.scroll_y = 0.0
         self.max_scroll = 500.0
+
+    def _refresh_char_list(self):
+        if self.char_tab_idx == 0:
+            self.chars = list(ORIGINAL_CHARACTER_NAMES)
+        elif self.char_tab_idx == 1:
+            self.chars = list(STARTER_POKEMON_NAMES)
+        else:
+            self.chars = list(LEGENDARY_CHARACTER_NAMES)
+        self.scroll_y = 0.0
 
     def needed_counts(self):
         mode = self.modes[self.mode_idx]
@@ -4687,6 +6628,9 @@ class Menu:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.state = "mode_select"
+                elif event.key == pygame.K_TAB:
+                    self.char_tab_idx = (self.char_tab_idx + 1) % len(self.char_tabs)
+                    self._refresh_char_list()
                 elif event.key == pygame.K_UP:
                     self.scroll_y = max(0, self.scroll_y - 40)
                 elif event.key == pygame.K_DOWN:
@@ -4701,11 +6645,22 @@ class Menu:
                 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 mx, my = event.pos
+                tab_y = 104
+                tab_w, tab_h = 130, 32
+                tab_gap = 12
+                tabs_total = len(self.char_tabs) * tab_w + (len(self.char_tabs) - 1) * tab_gap
+                tab_start_x = WIDTH//2 - tabs_total//2
+                for idx, label in enumerate(self.char_tabs):
+                    tx = tab_start_x + idx * (tab_w + tab_gap)
+                    if tx <= mx <= tx + tab_w and tab_y <= my <= tab_y + tab_h:
+                        self.char_tab_idx = idx
+                        self._refresh_char_list()
+                        return
                 my_adj = my + self.scroll_y
                 card_w, card_h = 120, 92
                 cols = 4
                 start_x = WIDTH//2 - (cols * (card_w+8))//2
-                start_y = 110
+                start_y = 140
                 for i, name in enumerate(self.chars):
                     col = i % cols
                     row = i // cols
@@ -4860,17 +6815,39 @@ class Menu:
         progress = self.font.render(hint_txt, True, WHITE)
         screen.blit(progress, (WIDTH//2 - progress.get_width()//2, 70))
 
+        tab_y = 104
+        tab_w, tab_h = 130, 32
+        tab_gap = 12
+        tabs_total = len(self.char_tabs) * tab_w + (len(self.char_tabs) - 1) * tab_gap
+        tab_start_x = WIDTH//2 - tabs_total//2
+        for idx, label in enumerate(self.char_tabs):
+            tx = tab_start_x + idx * (tab_w + tab_gap)
+            active = idx == self.char_tab_idx
+            if active and label == "Pokemon":
+                fill = (35, 90, 60)
+            elif active and label == "Legendary":
+                fill = (92, 72, 28)
+            elif active:
+                fill = (60, 75, 120)
+            else:
+                fill = (30, 30, 50)
+            border = GOLD if active else (90, 90, 120)
+            pygame.draw.rect(screen, fill, (tx, tab_y, tab_w, tab_h), border_radius=10)
+            pygame.draw.rect(screen, border, (tx, tab_y, tab_w, tab_h), 2, border_radius=10)
+            tab_txt = self.font_small.render(label, True, WHITE)
+            screen.blit(tab_txt, (tx + tab_w//2 - tab_txt.get_width()//2, tab_y + tab_h//2 - tab_txt.get_height()//2))
+
         # 2. Scrollable Gallery
         card_w, card_h = 122, 95
         cols = 4
         start_x = WIDTH//2 - (cols * (card_w+8))//2
         start_y = 10
         mx, my = pygame.mouse.get_pos()
-        my_adj = my + self.scroll_y - 110 # Gallery starts at y=110
+        my_adj = my + self.scroll_y - 140 # Gallery starts at y=140
 
         rows = (len(self.chars) + cols - 1) // cols
         gallery_h = rows * (card_h + 8) + 40
-        self.max_scroll = max(0, gallery_h - (HEIGHT - 230))
+        self.max_scroll = max(0, gallery_h - (HEIGHT - 250))
         
         gallery = pygame.Surface((WIDTH, gallery_h), pygame.SRCALPHA)
         hover_target = None
@@ -4885,8 +6862,8 @@ class Menu:
             in_a = name in self.selected_a
             in_b = name in self.selected_b
             hovered = cx <= mx <= cx+card_w and cy <= my_adj <= cy+card_h
-            if hovered and 110 <= my <= HEIGHT - 110: 
-                hover_target = (cx, cy - self.scroll_y + 110, name, data)
+            if hovered and 140 <= my <= HEIGHT - 110: 
+                hover_target = (cx, cy - self.scroll_y + 140, name, data)
 
             # Draw Card
             bg_f = (15,45,100,230) if in_a else (120,25,35,230) if in_b else (25,25,50,200)
@@ -4909,17 +6886,17 @@ class Menu:
                 if ca>0: gallery.blit(self.font_small.render(f"A{ca if ca>1 else ''}", True, CYAN), (cx+6, cy+6))
                 if cb>0: gallery.blit(self.font_small.render(f"B{cb if cb>1 else ''}", True, PINK), (cx+card_w-20, cy+6))
 
-        gallery_rect = pygame.Rect(0, 110, WIDTH, HEIGHT - 220)
+        gallery_rect = pygame.Rect(0, 140, WIDTH, HEIGHT - 250)
         screen.set_clip(gallery_rect)
-        screen.blit(gallery, (0, 110 - self.scroll_y))
+        screen.blit(gallery, (0, 140 - self.scroll_y))
         screen.set_clip(None)
 
         # 2.5 Scrollbar Visual
         if self.max_scroll > 0:
-            bar_bh = HEIGHT - 220
+            bar_bh = HEIGHT - 250
             bar_h = max(20, (bar_bh / (self.max_scroll + bar_bh)) * bar_bh)
-            bar_y = 110 + (self.scroll_y / self.max_scroll) * (bar_bh - bar_h)
-            pygame.draw.rect(screen, (50, 50, 70), (WIDTH - 8, 110, 4, bar_bh))
+            bar_y = 140 + (self.scroll_y / self.max_scroll) * (bar_bh - bar_h)
+            pygame.draw.rect(screen, (50, 50, 70), (WIDTH - 8, 140, 4, bar_bh))
             pygame.draw.rect(screen, GOLD, (WIDTH - 8, bar_y, 4, bar_h))
 
         # 3. Footer (Fixed)
